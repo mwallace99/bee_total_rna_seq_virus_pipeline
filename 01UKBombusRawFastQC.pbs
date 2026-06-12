@@ -1,0 +1,20 @@
+#!/bin/bash
+
+#PBS -P rg47
+#PBS -l ncpus=10
+#PBS -l mem=40gb
+#PBS -l walltime=48:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47
+
+module load fastqc
+source /g/data/rg47/mw9045/miniconda3/etc/profile.d/conda.sh 
+conda activate /g/data/rg47/mw9045/miniconda3/envs/Beeviromics
+
+# Create output directory if it doesn't exist
+mkdir -p /g/data/rg47/mw9045/UKBombusRawFastQC
+
+cd /g/data/rg47/mw9045/UK_Bombus_Raw_RNA
+
+fastqc -t 6 -q -o /g/data/rg47/mw9045/UKBombusRawFastQC *fastq.gz

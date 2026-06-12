@@ -1,0 +1,168 @@
+#!/bin/bash
+
+#PBS -P rg47
+#PBS -l ncpus=48
+#PBS -l mem=100gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q express
+#PBS -l storage=gdata/rg47
+
+cd /g/data/rg47/mw9045/UKBombus_rRNA_alignment
+
+gunzip *unmapped*.fq.gz
+
+source /g/data/rg47/mw9045/miniconda3/etc/profile.d/conda.sh 
+conda activate /g/data/rg47/mw9045/miniconda3/envs/Beeviromics
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K01-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K01-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K01-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K01-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K01-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K01-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K02-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K02-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K02-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K06-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K06-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K06-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K06-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K06-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K06-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K07-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K07-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K07-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K08-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K08-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K08-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K09A-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K09A-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K09A-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K09A-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K09A-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K09A-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K10-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K10-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K10-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K11-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K11-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K11-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K17-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K17-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K17-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K19-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K19-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K19-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K21-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K21-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K21-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K23-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K23-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K23-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K24-F_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K24-F_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K24-F_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K24-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K24-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K24-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K26-M_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/K26-M_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/K26-M_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx
+
+STAR --runThreadN $PBS_NCPUS \
+     --readFilesIn /g/data/rg47/mw9045/UKBombus_rRNA_alignment/NegC_unmapped1.fq /g/data/rg47/mw9045/UKBombus_rRNA_alignment/NegC_unmapped2.fq \
+     --genomeDir /g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus \
+     --outSAMtype BAM SortedByCoordinate \
+     --outFileNamePrefix /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus/NegC_Bombus_results \
+     --limitBAMsortRAM 4249358420 \
+     --outReadsUnmapped Fastx

@@ -1,0 +1,52 @@
+#!/bin/bash
+
+#PBS -P rg47
+#PBS -l ncpus=48
+#PBS -l mem=100gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q express
+#PBS -l storage=gdata/rg47
+
+source /g/data/rg47/mw9045/miniconda3/etc/profile.d/conda.sh 
+conda activate /g/data/rg47/mw9045/miniconda3/envs/Beeviromics
+
+cd /g/data/rg47/mw9045/UKBOMBUSSTAR_alignment/Star-output_Bombus
+
+megahit -1 K01-F_Bombus_resultsUnmapped.out.mate1.fq -2 K01-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K01-F-Bombus-megahit-out
+
+megahit -1 K01-M_Bombus_resultsUnmapped.out.mate1.fq -2 K01-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K01-M-Bombus-megahit-out
+
+megahit -1 K02-F_Bombus_resultsUnmapped.out.mate1.fq -2 K02-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K02-F-Bombus-megahit-out
+
+megahit -1 K06-F_Bombus_resultsUnmapped.out.mate1.fq -2 K06-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K06-F-Bombus-megahit-out
+
+megahit -1 K06-M_Bombus_resultsUnmapped.out.mate1.fq -2 K06-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K06-M-Bombus-megahit-out
+
+megahit -1 K07-F_Bombus_resultsUnmapped.out.mate1.fq -2 K07-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K07-F-Bombus-megahit-out
+
+megahit -1 K08-M_Bombus_resultsUnmapped.out.mate1.fq -2 K08-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K08-M-Bombus-megahit-out
+
+megahit -1 K09A-F_Bombus_resultsUnmapped.out.mate1.fq -2 K09A-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K09A-F-Bombus-megahit-out
+
+megahit -1 K09A-M_Bombus_resultsUnmapped.out.mate1.fq -2 K09A-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K09A-M-Bombus-megahit-out
+
+megahit -1 K10-F_Bombus_resultsUnmapped.out.mate1.fq -2 K10-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K10-F-Bombus-megahit-out
+
+megahit -1 K11-F_Bombus_resultsUnmapped.out.mate1.fq -2 K11-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K11-F-Bombus-megahit-out
+
+megahit -1 K17-M_Bombus_resultsUnmapped.out.mate1.fq -2 K17-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K17-M-Bombus-megahit-out
+
+megahit -1 K19-M_Bombus_resultsUnmapped.out.mate1.fq -2 K19-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K19-M-Bombus-megahit-out
+
+megahit -1 K21-F_Bombus_resultsUnmapped.out.mate1.fq -2 K21-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K21-F-Bombus-megahit-out
+
+megahit -1 K23-M_Bombus_resultsUnmapped.out.mate1.fq -2 K23-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K23-M-Bombus-megahit-out
+
+megahit -1 K24-F_Bombus_resultsUnmapped.out.mate1.fq -2 K24-F_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K24-F-Bombus-megahit-out
+
+megahit -1 K24-M_Bombus_resultsUnmapped.out.mate1.fq -2 K24-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K24-M-Bombus-megahit-out
+
+megahit -1 K26-M_Bombus_resultsUnmapped.out.mate1.fq -2 K26-M_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/K26-M-Bombus-megahit-out
+
+megahit -1 NegC_Bombus_resultsUnmapped.out.mate1.fq -2 NegC_Bombus_resultsUnmapped.out.mate2.fq -o /g/data/rg47/mw9045/megahit/NegC-Bombus-megahit-out

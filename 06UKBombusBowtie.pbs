@@ -1,0 +1,72 @@
+#!/bin/bash
+
+#PBS -P rg47
+#PBS -l ncpus=10
+#PBS -l mem=40gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q express
+#PBS -l storage=gdata/rg47
+
+source /g/data/rg47/mw9045/miniconda3/etc/profile.d/conda.sh 
+conda activate /g/data/rg47/mw9045/miniconda3/envs/Beeviromics
+
+cd /g/data/rg47/mw9045/UKBombus_rRNA_alignment
+module load bowtie2
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K01-F_R1_main.fq.gz -2 K01-F_R2_main.fq.gz -S K01-F_rRNA.sam --un-conc-gz K01-F_unmapped%.fq.gz &> K01-F_rRNA_log.txt
+rm -f K01-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K01-M_R1_main.fq.gz -2 K01-M_R2_main.fq.gz -S K01-M_rRNA.sam --un-conc-gz K01-M_unmapped%.fq.gz &> K01-M_rRNA_log.txt
+rm -f K01-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K02-F_R1_main.fq.gz -2 K02-F_R2_main.fq.gz -S K02-F_rRNA.sam --un-conc-gz K02-F_unmapped%.fq.gz &> K02-F_rRNA_log.txt
+rm -f K02-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K06-F_R1_main.fq.gz -2 K06-F_R2_main.fq.gz -S K06-F_rRNA.sam --un-conc-gz K06-F_unmapped%.fq.gz &> K06-F_rRNA_log.txt
+rm -f K06-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K06-M_R1_main.fq.gz -2 K06-M_R2_main.fq.gz -S K06-M_rRNA.sam --un-conc-gz K06-M_unmapped%.fq.gz &> K06-M_rRNA_log.txt
+rm -f K06-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K07-F_R1_main.fq.gz -2 K07-F_R2_main.fq.gz -S K07-F_rRNA.sam --un-conc-gz K07-F_unmapped%.fq.gz &> K07-F_rRNA_log.txt
+rm -f K07-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K08-M_R1_main.fq.gz -2 K08-M_R2_main.fq.gz -S K08-M_rRNA.sam --un-conc-gz K08-M_unmapped%.fq.gz &> K08-M_rRNA_log.txt
+rm -f K08-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K09A-F_R1_main.fq.gz -2 K09A-F_R2_main.fq.gz -S K09A-F_rRNA.sam --un-conc-gz K09A-F_unmapped%.fq.gz &> K09A-F_rRNA_log.txt
+rm -f K09A-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K09A-M_R1_main.fq.gz -2 K09A-M_R2_main.fq.gz -S K09A-M_rRNA.sam --un-conc-gz K09A-M_unmapped%.fq.gz &> K09A-M_rRNA_log.txt
+rm -f K09A-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K10-F_R1_main.fq.gz -2 K10-F_R2_main.fq.gz -S K10-F_rRNA.sam --un-conc-gz K10-F_unmapped%.fq.gz &> K10-F_rRNA_log.txt
+rm -f K10-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K11-F_R1_main.fq.gz -2 K11-F_R2_main.fq.gz -S K11-F_rRNA.sam --un-conc-gz K11-F_unmapped%.fq.gz &> K11-F_rRNA_log.txt
+rm -f K11-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K17-M_R1_main.fq.gz -2 K17-M_R2_main.fq.gz -S K17-M_rRNA.sam --un-conc-gz K17-M_unmapped%.fq.gz &> K17-M_rRNA_log.txt
+rm -f K17-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K19-M_R1_main.fq.gz -2 K19-M_R2_main.fq.gz -S K19-M_rRNA.sam --un-conc-gz K19-M_unmapped%.fq.gz &> K19-M_rRNA_log.txt
+rm -f K19-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K21-F_R1_main.fq.gz -2 K21-F_R2_main.fq.gz -S K21-F_rRNA.sam --un-conc-gz K21-F_unmapped%.fq.gz &> K21-F_rRNA_log.txt
+rm -f K21-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K23-M_R1_main.fq.gz -2 K23-M_R2_main.fq.gz -S K23-M_rRNA.sam --un-conc-gz K23-M_unmapped%.fq.gz &> K23-M_rRNA_log.txt
+rm -f K23-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K24-F_R1_main.fq.gz -2 K24-F_R2_main.fq.gz -S K24-F_rRNA.sam --un-conc-gz K24-F_unmapped%.fq.gz &> K24-F_rRNA_log.txt
+rm -f K24-F_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K24-M_R1_main.fq.gz -2 K24-M_R2_main.fq.gz -S K24-M_rRNA.sam --un-conc-gz K24-M_unmapped%.fq.gz &> K24-M_rRNA_log.txt
+rm -f K24-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 K26-M_R1_main.fq.gz -2 K26-M_R2_main.fq.gz -S K26-M_rRNA.sam --un-conc-gz K26-M_unmapped%.fq.gz &> K26-M_rRNA_log.txt
+rm -f K26-M_rRNA.sam
+
+bowtie2 -p 8 -x Bombus_rRNA -1 NegC_R1_main.fq.gz -2 NegC_R2_main.fq.gz -S NegC_rRNA.sam --un-conc-gz NegC_unmapped%.fq.gz &> NegC_rRNA_log.txt
+rm -f NegC_rRNA.sam

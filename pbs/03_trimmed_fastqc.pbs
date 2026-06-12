@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -P rg47
+#PBS -l ncpus=10
+#PBS -l mem=40gb
+#PBS -l walltime=48:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47
+# ============================================================================
+# 03 - FastQC on the trim-galore output
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+module load fastqc
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+
+TRIM="${RESULTS_DIR}/02_trimmed"
+OUT="${RESULTS_DIR}/03_trimmed_fastqc"
+mkdir -p "$OUT"
+
+echo "Running FastQC on trimmed reads in ${TRIM} -> ${OUT}"
+run bash -c "fastqc -t '$THREADS' -q -o '$OUT' '$TRIM'/*_val_*.fq.gz"

@@ -1,0 +1,36 @@
+#!/bin/bash
+#PBS -P rg47
+#PBS -l ncpus=4
+#PBS -l mem=16gb
+#PBS -l walltime=02:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47
+# ============================================================================
+# 10 - Give STAR's unmapped mate files a .fq extension (for downstream tools)
+# ----------------------------------------------------------------------------
+#   <sample>_Unmapped.out.mate1  ->  <sample>_Unmapped.out.mate1.fq
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+STAR_OUT="${RESULTS_DIR}/09_star"
+
+for sample in $(list_samples); do
+    for mate in 1 2; do
+        src="${STAR_OUT}/${sample}/${sample}_Unmapped.out.mate${mate}"
+        if [ -f "$src" ]; then
+            run mv -- "$src" "${src}.fq"
+        elif [ -f "${src}.fq" ]; then
+            echo "Already renamed: ${src}.fq"
+        else
+            echo "WARNING: missing STAR unmapped mate: $src" >&2
+        fi
+    done
+done

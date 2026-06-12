@@ -1,0 +1,23 @@
+# Example sample sheet  ->  copy/rename to ${PROJECT}_rna_samples.txt
+# (with PROJECT set in config.sh; default PROJECT=UKBombus -> UKBombus_rna_samples.txt)
+#
+# One raw paired-end fastq filename per line, R1 and R2 on SEPARATE lines.
+# Files are looked up in $RAW_DIR (config.sh) unless the line is an absolute
+# path or contains a "/". Lines starting with # and blank lines are ignored.
+#
+# Sample ID = text before the first underscore (here: K01-F, K01-M, NegC).
+# Files that share a sample ID are treated as lanes and concatenated (stage 04).
+# Override sample_id_of() in config.sh if your names use another convention.
+
+K01-F_237V23LT3_GCGTGGATGG-TTGACCAATG_L003_R1.fastq.gz
+K01-F_237V23LT3_GCGTGGATGG-TTGACCAATG_L003_R2.fastq.gz
+K01-F_237V23LT3_GCGTGGATGG-TTGACCAATG_L004_R1.fastq.gz
+K01-F_237V23LT3_GCGTGGATGG-TTGACCAATG_L004_R2.fastq.gz
+K01-M_237V23LT3_TCTGGTATCC-CGTTGCTTAC_L003_R1.fastq.gz
+K01-M_237V23LT3_TCTGGTATCC-CGTTGCTTAC_L003_R2.fastq.gz
+K01-M_237V23LT3_TCTGGTATCC-CGTTGCTTAC_L004_R1.fastq.gz
+K01-M_237V23LT3_TCTGGTATCC-CGTTGCTTAC_L004_R2.fastq.gz
+NegC_237V23LT3_TCATAGATTG-GATTAAGGTG_L003_R1.fastq.gz
+NegC_237V23LT3_TCATAGATTG-GATTAAGGTG_L003_R2.fastq.gz
+NegC_237V23LT3_TCATAGATTG-GATTAAGGTG_L004_R1.fastq.gz
+NegC_237V23LT3_TCATAGATTG-GATTAAGGTG_L004_R2.fastq.gz

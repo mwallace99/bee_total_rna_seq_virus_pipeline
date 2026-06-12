@@ -1,10 +1,15 @@
 # ============================================================================
-# blastx_add_taxid_Version2.r
+# blastx_add_taxid.r
 # ----------------------------------------------------------------------------
-# Reads Diamond BLASTX output (outfmt 6 with staxids), expands multi-taxid
+# Reads DIAMOND BLASTX output (outfmt 6 with staxids), expands multi-taxid
 # rows, and joins with NCBI scientific names.
 #
-# Usage: Rscript blastx_add_taxid_Version2.r --file input.txt --output output.txt
+# Usage:
+#   Rscript blastx_add_taxid.r --file input.tsv --names names.txt --output out.tsv
+#
+# The taxid->name table (--names) is tab separated: <taxid> <TAB> <name>.
+# (Path provided on the command line so the script is not tied to one project;
+# default falls back to $NAMES_TXT in the environment if --names is omitted.)
 # ============================================================================
 
 library(dplyr)
@@ -12,14 +17,20 @@ library(tidyr)
 library(readr)
 library(argparse)
 
-# Parse command line arguments
 parser <- ArgumentParser(description = "Process BLAST output and join with scientific names")
 parser$add_argument("--file", type = "character", help = "The BLAST file to process")
+parser$add_argument("--names", type = "character",
+                    default = Sys.getenv("NAMES_TXT", ""),
+                    help = "Tab-separated taxid<TAB>name table")
 parser$add_argument("--output", type = "character", help = "The output file to save")
 args <- parser$parse_args()
 
-# Read the names.txt (located in same directory as this script)
-names_scientific <- read_delim("/home/576/mw9045/Jobs/UKBombus_BLAST/names.txt",
+if (is.null(args$names) || args$names == "") {
+  stop("No names table provided: pass --names <file> or set NAMES_TXT in the environment")
+}
+
+# Read the taxid -> scientific name table
+names_scientific <- read_delim(args$names,
                                delim = "\t",
                                col_names = c("taxid", "name"),
                                trim_ws = TRUE,
@@ -29,7 +40,7 @@ names_scientific <- read_delim("/home/576/mw9045/Jobs/UKBombus_BLAST/names.txt",
 # Read the BLAST output file
 sample_blast <- read_delim(args$file, delim = "\t", col_names = FALSE)
 
-# Assign column names matching Diamond outfmt 6
+# Assign column names matching the DIAMOND outfmt 6 used in stage 14
 colnames(sample_blast) <- c("query", "hit_id", "identity", "alignment_length", "evalue", "score", "taxid")
 
 # Expand rows to handle multiple taxIDs (semicolon-separated)

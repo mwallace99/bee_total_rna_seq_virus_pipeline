@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -P rg47
+#PBS -l ncpus=10
+#PBS -l mem=40gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47
+# ============================================================================
+# 05 - FastQC on the concatenated per-sample reads
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+module load fastqc
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+
+CONCAT="${RESULTS_DIR}/04_concat"
+OUT="${RESULTS_DIR}/05_concat_fastqc"
+mkdir -p "$OUT"
+
+echo "Running FastQC on concatenated reads in ${CONCAT} -> ${OUT}"
+run bash -c "fastqc -t '$THREADS' -q -o '$OUT' '$CONCAT'/*_main.fq.gz"

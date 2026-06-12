@@ -1,0 +1,48 @@
+#!/bin/bash
+#PBS -P rg47
+#PBS -l ncpus=4
+#PBS -l mem=32gb
+#PBS -l walltime=04:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47
+# ============================================================================
+# 15 - Annotate the DIAMOND-vs-nr hits with NCBI scientific names
+# ----------------------------------------------------------------------------
+# Wraps blastx_add_taxid.r; needs $NAMES_TXT (taxid<TAB>name).
+# Output: results/15_taxid/<sample>/<sample>_diamond_nr_named.tsv
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_BLAST"
+
+if [ ! -f "$NAMES_TXT" ]; then
+    echo "ERROR: names table not found: ${NAMES_TXT} (set NAMES_TXT in config.sh)" >&2
+    exit 1
+fi
+
+DIAMOND="${RESULTS_DIR}/14_diamond_nr"
+OUT="${RESULTS_DIR}/15_taxid"
+mkdir -p "$OUT"
+
+for sample in $(list_samples); do
+    in_tsv="${DIAMOND}/${sample}/${sample}_diamond_nr.tsv"
+    if [ ! -s "$in_tsv" ]; then
+        echo "Skipping ${sample}: no DIAMOND hits"
+        continue
+    fi
+    mkdir -p "${OUT}/${sample}"
+    echo "Annotating taxids: ${sample}"
+    run Rscript "${PROJECT_DIR}/blastx_add_taxid.r" \
+        --file "$in_tsv" \
+        --names "$NAMES_TXT" \
+        --output "${OUT}/${sample}/${sample}_diamond_nr_named.tsv"
+done

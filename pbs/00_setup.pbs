@@ -1,0 +1,72 @@
+#!/bin/bash
+#PBS -P rg47
+#PBS -l ncpus=4
+#PBS -l mem=32gb
+#PBS -l walltime=04:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47+gdata/if89
+# ============================================================================
+# 00 - One-time setup: results tree + RdRp-scan databases
+# ----------------------------------------------------------------------------
+# - Creates the results/ directory tree.
+# - Clones the RdRp-scan repo (if absent) and builds, into $RDRPSCAN_DIR/db:
+#     * a DIAMOND db (RdRp-scan.dmnd) from the repo's RdRp core protein FASTA,
+#       built with YOUR local diamond so versions match;
+#     * an hmmpress'ed copy of the repo's RdRp_HMM_profile.db.
+# Safe to re-run: existing, up-to-date artifacts are left in place.
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+cd "$PROJECT_DIR"
+
+# ---- results tree -----------------------------------------------------------
+echo "Creating results tree under ${RESULTS_DIR}"
+run mkdir -p \
+    "${RESULTS_DIR}/01_raw_fastqc" "${RESULTS_DIR}/02_trimmed" \
+    "${RESULTS_DIR}/03_trimmed_fastqc" "${RESULTS_DIR}/04_concat" \
+    "${RESULTS_DIR}/05_concat_fastqc" "${RESULTS_DIR}/06_rrna" \
+    "${RESULTS_DIR}/07_rrna_fastqc" "${RESULTS_DIR}/09_star" \
+    "${RESULTS_DIR}/11_star_fastqc" "${RESULTS_DIR}/12_megahit" \
+    "${RESULTS_DIR}/13_blastn" "${RESULTS_DIR}/14_diamond_nr" \
+    "${RESULTS_DIR}/15_taxid" "${RESULTS_DIR}/16_rdrpscan"
+
+# ---- RdRp-scan databases ----------------------------------------------------
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_RDRP"
+
+if [ ! -d "$RDRPSCAN_DIR/.git" ] && [ -z "$(ls -A "$RDRPSCAN_DIR" 2>/dev/null || true)" ]; then
+    echo "Cloning RdRp-scan -> ${RDRPSCAN_DIR}"
+    run git clone "$RDRPSCAN_REPO_URL" "$RDRPSCAN_DIR"
+else
+    echo "RdRp-scan already present at ${RDRPSCAN_DIR}"
+fi
+
+DB_OUT="${RDRPSCAN_DIR}/db"
+mkdir -p "$DB_OUT"
+
+# Locate the source files wherever they sit inside the cloned repo.
+SRC_FASTA="$(find "$RDRPSCAN_DIR" -name 'RdRp-scan_*.fasta' ! -name '*CLUSTALO*' ! -name '*motifs*' | sort | head -n1 || true)"
+SRC_HMM="$(find "$RDRPSCAN_DIR" -name 'RdRp_HMM_profile*.db' | sort | head -n1 || true)"
+
+if [ -z "$SRC_FASTA" ]; then
+    echo "WARNING: could not find RdRp-scan core protein FASTA; set RDRPSCAN_DMND manually." >&2
+else
+    echo "Building DIAMOND db from ${SRC_FASTA}"
+    run diamond makedb --in "$SRC_FASTA" --db "${RDRPSCAN_DMND%.dmnd}" --threads "${PBS_NCPUS:-$THREADS}"
+fi
+
+if [ -z "$SRC_HMM" ]; then
+    echo "WARNING: could not find RdRp_HMM_profile.db; set RDRPSCAN_HMM manually." >&2
+else
+    echo "Preparing HMM profile db from ${SRC_HMM}"
+    run cp -f "$SRC_HMM" "$RDRPSCAN_HMM"
+    # hmmpress builds .h3{f,i,m,p}; --force overwrites a previous press.
+    run hmmpress -f "$RDRPSCAN_HMM"
+fi
+
+echo "Setup complete."

@@ -1,0 +1,117 @@
+#!/bin/bash
+#PBS -P rg47
+#PBS -l ncpus=48
+#PBS -l mem=190gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47+scratch/rg47
+# ============================================================================
+# 16 - RdRp-scan: find divergent / novel RNA viruses among the UNKNOWN contigs
+# ----------------------------------------------------------------------------
+# Runs on the SAME blastn-unknown contigs as stage 14 (DIAMOND-vs-nr), so the
+# two approaches can be compared.
+#
+# Per sample (input results/13_blastn/<sample>/<sample>_unknown_contigs.fa):
+#   1. getorf translates ORFs (>= GETORF_MINLEN aa) under each viral genetic
+#      code in GETORF_TABLES.
+#   2. diamond blastx of the contigs vs the RdRp-scan protein db.
+#   3. hmmsearch of the ORFs vs the RdRp-scan HMM profile db.
+#   4. union of contigs hit by either -> <sample>_rdrp_candidate_contigs.fasta
+#
+# Output dir: results/16_rdrpscan/<sample>/
+#   <sample>_rdrpscan_diamond.tsv      diamond blastx hits (outfmt 6 + evalue/bitscore)
+#   <sample>_rdrpscan_hmm.tbl          hmmsearch --tblout
+#   <sample>_orfs.faa                  translated ORFs
+#   <sample>_rdrp_candidate_contigs.fasta
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_RDRP"
+
+BLASTN="${RESULTS_DIR}/13_blastn"
+OUT="${RESULTS_DIR}/16_rdrpscan"
+mkdir -p "$OUT"
+
+# getorf -minsize is in nucleotides; convert the aa cutoff.
+MINSIZE_NT=$(( GETORF_MINLEN * 3 ))
+
+rdrpscan_sample() {
+    local sample="$1"
+    local query="${BLASTN}/${sample}/${sample}_unknown_contigs.fa"
+    local sdir="${OUT}/${sample}"
+    local orfs="${sdir}/${sample}_orfs.faa"
+    local dmnd_out="${sdir}/${sample}_rdrpscan_diamond.tsv"
+    local hmm_out="${sdir}/${sample}_rdrpscan_hmm.tbl"
+    local cand="${sdir}/${sample}_rdrp_candidate_contigs.fasta"
+
+    if [ ! -s "$query" ]; then
+        echo "Skipping ${sample}: no unknown contigs"
+        return 0
+    fi
+    mkdir -p "$sdir"
+    echo "=== RdRp-scan ${sample} ==="
+
+    if [ "$DRYRUN" = "1" ]; then
+        echo "+ (dryrun) getorf[tables: ${GETORF_TABLES}] + diamond blastx vs RdRp db + hmmsearch -> ${sdir}"
+        return 0
+    fi
+
+    # --- 1. translate ORFs under each viral genetic code ---
+    : > "$orfs"
+    for t in $GETORF_TABLES; do
+        local tmp="${sdir}/.orf_tbl${t}.faa"
+        getorf -sequence "$query" -outseq "$tmp" -table "$t" -minsize "$MINSIZE_NT" -find 0 2>/dev/null
+        # tag ORF headers with the table so names stay unique across codes
+        awk -v t="$t" '/^>/{print $1"_tbl"t; next}1' "$tmp" >> "$orfs"
+        rm -f "$tmp"
+    done
+    # drop identical duplicate ORF sequences if seqkit is available
+    if command -v seqkit >/dev/null 2>&1; then
+        seqkit rmdup -s "$orfs" -o "${orfs}.nr" 2>/dev/null && mv "${orfs}.nr" "$orfs"
+    fi
+
+    # --- 2. diamond blastx of contigs vs the RdRp-scan protein db ---
+    diamond blastx \
+        --db "$RDRPSCAN_DMND" \
+        --query "$query" \
+        --out "$dmnd_out" \
+        --outfmt 6 qseqid sseqid pident length evalue bitscore staxids \
+        --evalue "$EVALUE_DIAMOND" \
+        --threads "${PBS_NCPUS:-$THREADS}" \
+        --tmpdir "$SCRATCH_BASE"
+
+    # --- 3. hmmsearch of ORFs vs the RdRp HMM profile db ---
+    hmmsearch --tblout "$hmm_out" -E "$EVALUE_HMM" --cpu "${PBS_NCPUS:-$THREADS}" \
+        "$RDRPSCAN_HMM" "$orfs" > "${sdir}/${sample}_hmmsearch.log" 2>&1
+
+    # --- 4. union of contigs hit by diamond OR hmm -> candidate fasta ---
+    {
+        cut -f1 "$dmnd_out" 2>/dev/null
+        # hmm tblout col1 = ORF name; strip _tbl<N> then the getorf _<orf#> suffix
+        grep -v '^#' "$hmm_out" 2>/dev/null | awk '{n=$1; sub(/_tbl[0-9]+$/,"",n); sub(/_[0-9]+$/,"",n); print n}'
+    } | sort -u > "${sdir}/${sample}_rdrp_candidate_ids.txt"
+
+    awk 'BEGIN{while((getline l < "'"${sdir}/${sample}_rdrp_candidate_ids.txt"'")>0) c[l]=1}
+         /^>/{h=substr($1,2); keep=(h in c)} {if(keep) print}' \
+        "$query" > "$cand"
+
+    echo "${sample}: $(grep -c . "${sdir}/${sample}_rdrp_candidate_ids.txt" || true) RdRp candidate contig(s)"\
+" [diamond $(cut -f1 "$dmnd_out" 2>/dev/null | sort -u | grep -c . || true),"\
+" hmm $(grep -vc '^#' "$hmm_out" 2>/dev/null || true) raw hits]"
+}
+
+mapfile -t SAMPLES < <(list_samples)
+if [ -n "${PBS_ARRAY_INDEX:-}" ]; then
+    rdrpscan_sample "${SAMPLES[$((PBS_ARRAY_INDEX-1))]}"
+else
+    for s in "${SAMPLES[@]}"; do rdrpscan_sample "$s" || echo "WARN: ${s} failed; continuing with next sample" >&2; done
+fi

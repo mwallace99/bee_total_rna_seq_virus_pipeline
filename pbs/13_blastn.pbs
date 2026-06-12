@@ -1,0 +1,128 @@
+#!/bin/bash
+#PBS -P rg47
+#PBS -l ncpus=48
+#PBS -l mem=190gb
+#PBS -l walltime=48:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47+scratch/rg47+gdata/if89
+# ============================================================================
+# 13 - blastn of assembled contigs vs nt, then split into known / unknown /
+#      possible-viral sets. (Canonical replacement for the old per-sample
+#      1.2_blastn_*.pbs; chunked + memory-safe parallel, distilled from
+#      1.2c_idempotent_rerun_jobs.sh.)
+#
+# Per sample, writes to results/13_blastn/<sample>/:
+#   <sample>_blast.txt                  merged blastn hits (outfmt 6 + sskingdoms)
+#   <sample>_blast_hits.txt             query IDs with ANY nt hit
+#   <sample>_unknown_contigs.fa         contigs with NO nt hit  <-- input to 14 & 16
+#   <sample>_sorted_blast.txt           hits sorted by query, e-value
+#   <sample>_possible_viral_hits.txt    best hit per query in viral/unknown kingdoms
+#   <sample>_possible_viral_contigs.fasta
+#
+# Runs ALL samples sequentially by default. If submitted as a PBS array
+# (qsub -J 1-N), each task processes one sample.
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_BLAST"
+
+export BLASTDB_LMDB_DISABLE=1
+export BLASTDB="$NT_DB_PATH"
+
+MEGAHIT="${RESULTS_DIR}/12_megahit"
+RESULTS="${RESULTS_DIR}/13_blastn"
+mkdir -p "$RESULTS"
+
+# Concurrency: keep ncpus busy without exhausting RAM (see 1.2c rationale).
+THREADS_PER_CHUNK=8
+MAX_PARALLEL=$(( ${PBS_NCPUS:-$THREADS} / THREADS_PER_CHUNK ))
+[ "$MAX_PARALLEL" -lt 1 ] && MAX_PARALLEL=1
+
+blast_sample() {
+    local sample="$1"
+    local query="${MEGAHIT}/${sample}/${sample}_renamed_contigs.fa"
+    local sdir="${RESULTS}/${sample}"
+    local scratch="${SCRATCH_BASE}/blastn_${sample}_${PBS_JOBID:-local}"
+    local chunkdir="${scratch}/chunks"
+
+    if [ ! -f "$query" ]; then
+        echo "ERROR: query not found for ${sample}: ${query}" >&2
+        return 1
+    fi
+
+    echo "[$(date)] === blastn ${sample} ==="
+    if [ "$DRYRUN" = "1" ]; then
+        echo "+ (dryrun) seqkit split2 + blastn ${MAX_PARALLEL}x${THREADS_PER_CHUNK} threads -> ${sdir}"
+        return 0
+    fi
+
+    mkdir -p "$sdir" "$chunkdir"
+    export TMPDIR="$scratch" TEMP="$scratch" TMP="$scratch"
+
+    # --- split contigs into chunks ---
+    seqkit split2 "$query" -s "$CHUNK_SIZE" -O "$chunkdir" --force
+    find "$chunkdir" -name '*.fa' | sort > "${sdir}/${sample}_chunks.txt"
+    local total; total=$(wc -l < "${sdir}/${sample}_chunks.txt")
+    echo "[$(date)] ${total} chunk(s)"
+    [ "$total" -eq 0 ] && { echo "ERROR: no chunks for ${sample}" >&2; rm -rf "$scratch"; return 1; }
+
+    # --- blast each chunk, bounded parallelism, atomic per-chunk output ---
+    while IFS= read -r chunk; do
+        local cname out; cname=$(basename "$chunk" .fa); out="${sdir}/${cname}_blast.txt"
+        [ -s "$out" ] && continue
+        while [ "$(jobs -r | wc -l)" -ge "$MAX_PARALLEL" ]; do sleep 2; done
+        (
+            blastn -db "$NT_DB_NAME" -query "$chunk" -out "${out}.tmp" \
+                -outfmt "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore sskingdoms" \
+                -evalue "$EVALUE_BLASTN" -num_threads "$THREADS_PER_CHUNK" 2>/dev/null \
+            && mv "${out}.tmp" "$out" || rm -f "${out}.tmp"
+        ) &
+        sleep 1
+    done < "${sdir}/${sample}_chunks.txt"
+    wait
+
+    # --- merge ---
+    find "$sdir" -name '*_blast.txt' -type f ! -name "${sample}_blast.txt" -exec cat {} + \
+        > "${sdir}/${sample}_blast.txt" || true
+
+    # --- known vs unknown contigs ---
+    cut -f1 "${sdir}/${sample}_blast.txt" | sort -T "$scratch" -u > "${sdir}/${sample}_blast_hits.txt"
+    awk 'BEGIN{while((getline l < "'"${sdir}/${sample}_blast_hits.txt"'")>0) hit[l]=1}
+         /^>/{h=substr($1,2); keep=!(h in hit)} {if(keep) print}' \
+        "$query" > "${sdir}/${sample}_unknown_contigs.fa"
+
+    # --- sort + extract possible viral (viral/unknown kingdom, best hit/query) ---
+    sort -t $'\t' -k1,1 -k11,11g -T "$scratch" "${sdir}/${sample}_blast.txt" \
+        > "${sdir}/${sample}_sorted_blast.txt"
+    awk -F'\t' '!seen[$1]++ && ($13=="Viruses" || $13=="Unclassified" || $13=="N/A" || $13=="Other" || $13=="")' \
+        "${sdir}/${sample}_sorted_blast.txt" > "${sdir}/${sample}_possible_viral_hits.txt"
+    cut -f1 "${sdir}/${sample}_possible_viral_hits.txt" | sort -T "$scratch" -u \
+        > "${sdir}/${sample}_possible_viral_query_ids.txt"
+    awk 'BEGIN{while((getline l < "'"${sdir}/${sample}_possible_viral_query_ids.txt"'")>0) vir[l]=1}
+         /^>/{h=substr($1,2); keep=(h in vir)} {if(keep) print}' \
+        "$query" > "${sdir}/${sample}_possible_viral_contigs.fasta"
+
+    # --- cleanup chunk-level files ---
+    find "$sdir" -name '*_blast.txt' -type f ! -name "${sample}_blast.txt" -delete
+    rm -rf "$scratch"
+
+    echo "[$(date)] ${sample}: $(wc -l < "${sdir}/${sample}_blast_hits.txt") hits, "\
+"$(grep -c '^>' "${sdir}/${sample}_unknown_contigs.fa" || true) unknown contigs, "\
+"$(wc -l < "${sdir}/${sample}_possible_viral_query_ids.txt") possible-viral"
+}
+
+mapfile -t SAMPLES < <(list_samples)
+if [ -n "${PBS_ARRAY_INDEX:-}" ]; then
+    blast_sample "${SAMPLES[$((PBS_ARRAY_INDEX-1))]}"
+else
+    for s in "${SAMPLES[@]}"; do blast_sample "$s" || echo "WARN: ${s} failed; continuing with next sample" >&2; done
+fi

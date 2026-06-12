@@ -1,0 +1,61 @@
+#!/bin/bash
+#PBS -P rg47
+#PBS -l ncpus=48
+#PBS -l mem=190gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/rg47+scratch/rg47
+# ============================================================================
+# 14 - DIAMOND blastx of the blastn-UNKNOWN contigs vs nr
+# ----------------------------------------------------------------------------
+# This is the "standard" sensitive translated search. Stage 16 (RdRp-scan) runs
+# on the SAME unknown contigs so the two can be compared.
+#
+# Output (per sample): results/14_diamond_nr/<sample>/<sample>_diamond_nr.tsv
+# outfmt columns match blastx_add_taxid.r:
+#   qseqid sseqid pident length evalue bitscore staxids
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_BLAST"
+
+BLASTN="${RESULTS_DIR}/13_blastn"
+OUT="${RESULTS_DIR}/14_diamond_nr"
+mkdir -p "$OUT"
+
+diamond_sample() {
+    local sample="$1"
+    local query="${BLASTN}/${sample}/${sample}_unknown_contigs.fa"
+    local sdir="${OUT}/${sample}"
+
+    if [ ! -s "$query" ]; then
+        echo "Skipping ${sample}: no unknown contigs (${query})"
+        return 0
+    fi
+    mkdir -p "$sdir"
+    echo "DIAMOND blastx vs nr: ${sample}"
+    run diamond blastx \
+        --db "$NR_DMND" \
+        --query "$query" \
+        --out "${sdir}/${sample}_diamond_nr.tsv" \
+        --outfmt 6 qseqid sseqid pident length evalue bitscore staxids \
+        --evalue "$EVALUE_DIAMOND" \
+        --threads "${PBS_NCPUS:-$THREADS}" \
+        --tmpdir "$SCRATCH_BASE"
+}
+
+mapfile -t SAMPLES < <(list_samples)
+if [ -n "${PBS_ARRAY_INDEX:-}" ]; then
+    diamond_sample "${SAMPLES[$((PBS_ARRAY_INDEX-1))]}"
+else
+    for s in "${SAMPLES[@]}"; do diamond_sample "$s" || echo "WARN: ${s} failed; continuing with next sample" >&2; done
+fi

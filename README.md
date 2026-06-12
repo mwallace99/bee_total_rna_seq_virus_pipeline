@@ -10,7 +10,7 @@ The pipeline takes raw RNA sequencing reads, performs quality control and trimmi
 
 - **Raw RNAseq data**: Paired-end fastq files containing total RNAseq reads.
 - **Host reference genomes/indices**: For Bowtie2 and STAR to perform host depletion.
-- **`names.txt`**: A crucial tab-separated text file containing NCBI tax ids and corresponding scientific species names. This is strictly required by the annotation scripts to map BLAST hit taxonomy IDs to readable species names.
+- **`names.txt`**: A required tab-separated text file containing NCBI tax ids and corresponding scientific species names. This is strictly required by the annotation scripts to map BLAST hit taxonomy IDs to readable species names.
 
 ## What will be produced
 

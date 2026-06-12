@@ -161,7 +161,7 @@ modules**, add `fastqc` and `bowtie2` to the `Beeviromics` env and delete the
 
 | Stage | Script | What it does | Env / module |
 |------:|--------|--------------|--------------|
-| 00 | `pbs/00_setup.pbs` | results tree; clone RdRp-scan; build its DIAMOND + HMM databases | BLAST |
+| 00 | `pbs/00_setup.pbs` | results tree; clone RdRp-scan; build its DIAMOND + HMM databases | BLAST · **copyq** (clone needs internet) |
 | 01 | `pbs/01_raw_fastqc.pbs` | FastQC on raw reads | module fastqc |
 | 02 | `pbs/02_trim_galore.pbs` | Trim Galore adapter/quality trimming (per lane) | Beeviromics |
 | 03 | `pbs/03_trimmed_fastqc.pbs` | FastQC on trimmed reads | module fastqc |

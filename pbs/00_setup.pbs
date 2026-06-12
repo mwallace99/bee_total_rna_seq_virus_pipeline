@@ -1,10 +1,10 @@
 #!/bin/bash
 #PBS -P rg47
-#PBS -l ncpus=4
-#PBS -l mem=32gb
-#PBS -l walltime=04:00:00
+#PBS -l ncpus=1
+#PBS -l mem=8gb
+#PBS -l walltime=02:00:00
 #PBS -l wd
-#PBS -q normal
+#PBS -q copyq
 #PBS -l storage=gdata/rg47+gdata/if89
 # ============================================================================
 # 00 - One-time setup: results tree + RdRp-scan databases
@@ -15,6 +15,11 @@
 #       built with YOUR local diamond so versions match;
 #     * an hmmpress'ed copy of the repo's RdRp_HMM_profile.db.
 # Safe to re-run: existing, up-to-date artifacts are left in place.
+#
+# Runs on the *copyq* queue because the git clone needs internet, which on Gadi
+# is only available from copyq (compute nodes are offline). The DB build is
+# light (small FASTA), so one CPU on copyq is plenty. If you have already cloned
+# RdRp-scan by other means, the clone is skipped and you can run this anywhere.
 # ============================================================================
 set -euo pipefail
 

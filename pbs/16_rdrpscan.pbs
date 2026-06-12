@@ -41,6 +41,16 @@ BLASTN="${RESULTS_DIR}/13_blastn"
 OUT="${RESULTS_DIR}/16_rdrpscan"
 mkdir -p "$OUT"
 
+# Fail loudly up front if a required tool is missing (otherwise the per-sample
+# loop silently produces empty results).
+for tool in getorf diamond hmmscan; do
+    command -v "$tool" >/dev/null 2>&1 || {
+        echo "ERROR: '$tool' not found in ${CONDA_ENV_RDRP}." >&2
+        echo "       Install it, e.g.: mamba install -n <env> -c bioconda emboss hmmer diamond" >&2
+        exit 1
+    }
+done
+
 # getorf -minsize is in nucleotides; convert the aa cutoff.
 MINSIZE_NT=$(( GETORF_MINLEN * 3 ))
 
@@ -69,29 +79,36 @@ rdrpscan_sample() {
     : > "$orfs"
     for t in $GETORF_TABLES; do
         local tmp="${sdir}/.orf_tbl${t}.faa"
-        getorf -sequence "$query" -outseq "$tmp" -table "$t" -minsize "$MINSIZE_NT" -find 0 2>/dev/null
+        getorf -sequence "$query" -outseq "$tmp" -table "$t" -minsize "$MINSIZE_NT" -find 0 \
+            2>> "${sdir}/${sample}_getorf.log" || true
         # tag ORF headers with the table so names stay unique across codes
-        awk -v t="$t" '/^>/{print $1"_tbl"t; next}1' "$tmp" >> "$orfs"
+        [ -s "$tmp" ] && awk -v t="$t" '/^>/{print $1"_tbl"t; next}1' "$tmp" >> "$orfs"
         rm -f "$tmp"
     done
     # drop identical duplicate ORF sequences if seqkit is available
-    if command -v seqkit >/dev/null 2>&1; then
+    if [ -s "$orfs" ] && command -v seqkit >/dev/null 2>&1; then
         seqkit rmdup -s "$orfs" -o "${orfs}.nr" 2>/dev/null && mv "${orfs}.nr" "$orfs"
     fi
 
     # --- 2. diamond blastx of contigs vs the RdRp-scan protein db ---
+    # No staxids: the RdRp-scan db carries no NCBI taxonomy (and none is needed).
     diamond blastx \
         --db "$RDRPSCAN_DMND" \
         --query "$query" \
         --out "$dmnd_out" \
-        --outfmt 6 qseqid sseqid pident length evalue bitscore staxids \
+        --outfmt 6 qseqid sseqid pident length evalue bitscore \
         --evalue "$EVALUE_DIAMOND" \
         --threads "${PBS_NCPUS:-$THREADS}" \
         --tmpdir "$SCRATCH_BASE"
 
     # --- 3. hmmscan of ORFs vs the RdRp HMM profile db (db is pre-pressed) ---
-    hmmscan --tblout "$hmm_out" -E "$EVALUE_HMM" --cpu "${PBS_NCPUS:-$THREADS}" \
-        "$RDRPSCAN_HMM" "$orfs" > "${sdir}/${sample}_hmmscan.log" 2>&1
+    if [ -s "$orfs" ]; then
+        hmmscan --tblout "$hmm_out" -E "$EVALUE_HMM" --cpu "${PBS_NCPUS:-$THREADS}" \
+            "$RDRPSCAN_HMM" "$orfs" > "${sdir}/${sample}_hmmscan.log" 2>&1
+    else
+        echo "  WARNING: no ORFs translated for ${sample} (check ${sample}_getorf.log); skipping hmmscan" >&2
+        : > "$hmm_out"
+    fi
 
     # --- 4. union of contigs hit by diamond OR hmm -> candidate fasta ---
     {

@@ -3,7 +3,7 @@
 # config.sh - single source of truth for the bee total-RNAseq virus pipeline
 # ----------------------------------------------------------------------------
 # Sourced by every pbs/NN_*.pbs stage and by lib/parse_samples.sh.
-# Edit this file (and your ${PROJECT}_rna_samples.txt sample sheet) - you should
+# Edit this file (and your ${STUDY}_rna_samples.txt sample sheet) - you should
 # not need to edit any of the stage scripts to run a new project.
 #
 # Paths are kept RELATIVE to $PROJECT_DIR wherever possible. Large shared
@@ -12,8 +12,10 @@
 # ============================================================================
 
 # ---- Project identity -------------------------------------------------------
-# PROJECT is the prefix of your sample sheet: ${PROJECT}_rna_samples.txt
-PROJECT="UKBombus"
+# STUDY is the prefix of your sample sheet: ${STUDY}_rna_samples.txt
+# NB: do NOT call this PROJECT - on NCI Gadi $PROJECT is a reserved variable that
+# holds your allocation project (e.g. rg47) and is read by nqstat / nci_account.
+STUDY="UKBombus"
 
 # Root of this checkout. Defaults to the directory containing config.sh, so the
 # scripts work from wherever the repo is cloned. Override if you run the stages
@@ -25,7 +27,7 @@ RAW_DIR="${PROJECT_DIR}/raw"
 
 # The sample sheet: one fastq filename per line, R1 and R2 on separate lines.
 # Blank lines and lines starting with # are ignored. See example_rna_samples.txt.
-SAMPLE_SHEET="${PROJECT_DIR}/${PROJECT}_rna_samples.txt"
+SAMPLE_SHEET="${PROJECT_DIR}/${STUDY}_rna_samples.txt"
 
 # All pipeline outputs live under here (relative), one sub-dir per stage.
 RESULTS_DIR="${PROJECT_DIR}/results"

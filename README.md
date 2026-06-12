@@ -34,9 +34,9 @@ wherever possible.
 
 1. **Clone / copy the repo** to where you will run it (e.g. `/g/data/rg47/<you>/<project>`).
 2. **Put your raw fastqs** in `raw/` (or set `RAW_DIR` in `config.sh`).
-3. **Create the sample sheet** `${PROJECT}_rna_samples.txt` — one fastq filename
+3. **Create the sample sheet** `${STUDY}_rna_samples.txt` — one fastq filename
    per line, R1 and R2 on separate lines. Copy `example_rna_samples.txt` as a
-   template. With the default `PROJECT=UKBombus` the file is
+   template. With the default `STUDY=UKBombus` the file is
    `UKBombus_rna_samples.txt`.
 4. **Edit `config.sh`** — project name, reference indexes, database paths, conda
    env paths, threads. Everything project-specific lives here.
@@ -57,7 +57,7 @@ wherever possible.
 
 ---
 
-## The sample sheet (`${PROJECT}_rna_samples.txt`)
+## The sample sheet (`${STUDY}_rna_samples.txt`)
 
 One **raw fastq filename per line, R1 and R2 on separate lines**:
 

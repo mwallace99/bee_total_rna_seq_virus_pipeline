@@ -13,7 +13,7 @@
 # - Clones the RdRp-scan repo (if absent) and builds, into $RDRPSCAN_DIR/db:
 #     * a DIAMOND db (RdRp-scan.dmnd) from the repo's RdRp core protein FASTA,
 #       built with YOUR local diamond so versions match;
-#     * an hmmpress'ed copy of the repo's RdRp_HMM_profile.db.
+#     * verifies the repo's pre-pressed RdRp HMM profile db (for hmmscan).
 # Safe to re-run: existing, up-to-date artifacts are left in place.
 #
 # Runs on the *copyq* queue because the git clone needs internet, which on Gadi
@@ -54,10 +54,8 @@ fi
 DB_OUT="${RDRPSCAN_DIR}/db"
 mkdir -p "$DB_OUT"
 
-# Locate the source files wherever they sit inside the cloned repo.
+# --- DIAMOND db: build from the RdRp-scan core protein FASTA ---
 SRC_FASTA="$(find "$RDRPSCAN_DIR" -name 'RdRp-scan_*.fasta' ! -name '*CLUSTALO*' ! -name '*motifs*' | sort | head -n1 || true)"
-SRC_HMM="$(find "$RDRPSCAN_DIR" -name 'RdRp_HMM_profile*.db' | sort | head -n1 || true)"
-
 if [ -z "$SRC_FASTA" ]; then
     echo "WARNING: could not find RdRp-scan core protein FASTA; set RDRPSCAN_DMND manually." >&2
 else
@@ -65,13 +63,26 @@ else
     run diamond makedb --in "$SRC_FASTA" --db "${RDRPSCAN_DMND%.dmnd}" --threads "${PBS_NCPUS:-$THREADS}"
 fi
 
-if [ -z "$SRC_HMM" ]; then
-    echo "WARNING: could not find RdRp_HMM_profile.db; set RDRPSCAN_HMM manually." >&2
+# --- HMM profile db: the repo ships it PRE-PRESSED (.h3{f,i,m,p}) for hmmscan,
+#     with no plain base file. Just locate the pressed db and verify it matches
+#     RDRPSCAN_HMM; only press if (unusually) an un-pressed base db is present. ---
+SRC_HMM_PRESSED="$(find "$RDRPSCAN_DIR" -name '*.h3m' | sort | head -n1 || true)"
+if [ -n "$SRC_HMM_PRESSED" ]; then
+    HMM_PREFIX="${SRC_HMM_PRESSED%.h3m}"
+    echo "Found pre-pressed HMM profile db: ${HMM_PREFIX}"
+    if [ "$HMM_PREFIX" != "$RDRPSCAN_HMM" ]; then
+        echo "NOTE: RDRPSCAN_HMM in config.sh is '${RDRPSCAN_HMM}'."
+        echo "      The repo's pressed db is at '${HMM_PREFIX}' — update config.sh if they differ."
+    fi
 else
-    echo "Preparing HMM profile db from ${SRC_HMM}"
-    run cp -f "$SRC_HMM" "$RDRPSCAN_HMM"
-    # hmmpress builds .h3{f,i,m,p}; --force overwrites a previous press.
-    run hmmpress -f "$RDRPSCAN_HMM"
+    SRC_HMM_BASE="$(find "$RDRPSCAN_DIR" -name 'RdRp_HMM_profile*.db' ! -name '*.h3*' | sort | head -n1 || true)"
+    if [ -n "$SRC_HMM_BASE" ]; then
+        echo "Pressing HMM profile db ${SRC_HMM_BASE}"
+        run hmmpress -f "$SRC_HMM_BASE"
+        [ "$SRC_HMM_BASE" = "$RDRPSCAN_HMM" ] || echo "NOTE: set RDRPSCAN_HMM=${SRC_HMM_BASE} in config.sh"
+    else
+        echo "WARNING: no HMM profile db (.h3m or base .db) found under ${RDRPSCAN_DIR}; set RDRPSCAN_HMM manually." >&2
+    fi
 fi
 
 echo "Setup complete."

@@ -64,7 +64,7 @@ for sample in $(list_samples); do
 
     # RdRp-scan hmmsearch: ORF target -> contig ID (strip _tbl<N> then _<orf#>)
     if [ -s "$rdrp_hmm" ]; then
-        grep -v '^#' "$rdrp_hmm" | awk '{n=$1; sub(/_tbl[0-9]+$/,"",n); sub(/_[0-9]+$/,"",n); print n}' \
+        grep -v '^#' "$rdrp_hmm" | awk '{n=$3; sub(/_tbl[0-9]+$/,"",n); sub(/_[0-9]+$/,"",n); print n}' \
             | sort -u > "${sdir}/.rdrp_hmm.ids"
     else : > "${sdir}/.rdrp_hmm.ids"; fi
 

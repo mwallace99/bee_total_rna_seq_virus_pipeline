@@ -81,8 +81,10 @@ RDRPSCAN_DIR="/g/data/rg47/mw9045/RdRp-scan"
 # DIAMOND db built by 00_setup from the RdRp-scan core protein fasta
 # (RdRp-scan_0.90.fasta), so it matches your local DIAMOND version.
 RDRPSCAN_DMND="${RDRPSCAN_DIR}/db/RdRp-scan.dmnd"
-# hmmpress'ed copy of the repo's RdRp_HMM_profile.db (built by 00_setup).
-RDRPSCAN_HMM="${RDRPSCAN_DIR}/db/RdRp_HMM_profile.db"
+# RdRp HMM profile db (HMMER3). The repo ships it pre-pressed as
+# Profile_db_and_alignments/RdRp_HMM_profile_CLUSTALO.db.h3{f,i,m,p}; this is the
+# prefix hmmscan reads (the .h3* files sit alongside it). 00_setup verifies it.
+RDRPSCAN_HMM="${RDRPSCAN_DIR}/Profile_db_and_alignments/RdRp_HMM_profile_CLUSTALO.db"
 
 # ---- Tuning -----------------------------------------------------------------
 # Threads used inside per-sample tool calls. Defaults to the PBS allocation if

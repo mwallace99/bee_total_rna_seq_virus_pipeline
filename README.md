@@ -174,11 +174,12 @@ modules**, add `fastqc` and `bowtie2` to the `Beeviromics` env and delete the
 | 10 | `pbs/10_post_star_rename.pbs` | Add `.fq` extension to STAR unmapped mates | — |
 | 11 | `pbs/11_star_fastqc.pbs` | FastQC on host-depleted reads | module fastqc |
 | 12 | `pbs/12_megahit.pbs` | MEGAHIT assembly + `<sample>_renamed_contigs.fa` | Beeviromics |
-| 13 | `pbs/13_blastn.pbs` | blastn vs `nt`; split into known / **unknown** / possible-viral | BLAST |
-| 14 | `pbs/14_blastx_diamond_nr.pbs` | DIAMOND blastx of **unknown** contigs vs `nr` | BLAST |
-| 15 | `pbs/15_add_taxid.pbs` | Annotate nr hits with scientific names (`blastx_add_taxid.r`) | BLAST |
-| 16 | `pbs/16_rdrpscan.pbs` | **RdRp-scan** on the same unknown contigs (getorf + DIAMOND + hmmsearch) | BLAST |
-| 17 | `pbs/17_compare_virus_search.pbs` | Compare nr (14) vs RdRp-scan (16); tabulate novel candidates | — |
+| 13 | `pbs/13_blastn.pbs` | blastn vs `nt`; split into known / **unknown** / possible-viral (hits include scientific names) | BLAST |
+| 14 | `pbs/14_blastn_add_names.pbs` | *(optional)* back-fill scientific names onto blastn tables that lack them (e.g. older runs); not auto-chained | BLAST |
+| 15 | `pbs/15_blastx_diamond_nr.pbs` | DIAMOND blastx of **unknown** contigs vs `nr` | BLAST |
+| 16 | `pbs/16_add_taxid.pbs` | Annotate nr hits with scientific names (`blastx_add_taxid.r`) | BLAST |
+| 17 | `pbs/17_rdrpscan.pbs` | **RdRp-scan** on the same unknown contigs (getorf + DIAMOND + hmmsearch) | BLAST |
+| 18 | `pbs/18_compare_virus_search.pbs` | Compare nr (15) vs RdRp-scan (17); tabulate novel candidates | — |
 
 ### Read flow (what feeds what)
 
@@ -186,11 +187,11 @@ modules**, add `fastqc` and `bowtie2` to the `Beeviromics` env and delete the
 raw fastqs
   └─02 trim ─04 concat ─06 rRNA-deplete ─09 host-deplete ─12 assemble
         └─ <sample>_renamed_contigs.fa
-              └─13 blastn vs nt
+              └─13 blastn vs nt  (+14 optional: name the hits)
                     ├─ <sample>_possible_viral_contigs.fasta   (viral-kingdom nt hits)
-                    └─ <sample>_unknown_contigs.fa  ─┬─14 DIAMOND blastx vs nr ─15 add names
-                                                     └─16 RdRp-scan (getorf+diamond+hmmsearch)
-                                                          └─17 compare 14 vs 16
+                    └─ <sample>_unknown_contigs.fa  ─┬─15 DIAMOND blastx vs nr ─16 add names
+                                                     └─17 RdRp-scan (getorf+diamond+hmmsearch)
+                                                          └─18 compare 15 vs 17
 ```
 
 ---
@@ -204,7 +205,7 @@ than running on bad input.
 
 Gadi's **48 h walltime is per job**, not for the whole chain — each stage is a
 separate job, so the full run can span well beyond 48 h. The one caveat: stages
-**13/14/16 process all samples in a single job**, which for a large cohort can
+**13/15/17 process all samples in a single job**, which for a large cohort can
 approach the per-job limit. Those three therefore also accept **PBS array**
 submission, one sample per task (each with its own 48 h):
 
@@ -229,18 +230,18 @@ Everything lands under `results/` (one sub-dir per stage). Highlights:
   - `<sample>_unknown_contigs.fa` — contigs with **no** `nt` hit (input to 14 & 16)
   - `<sample>_possible_viral_contigs.fasta`, `<sample>_possible_viral_hits.txt`
   - `<sample>_blast.txt`, `<sample>_sorted_blast.txt`, `<sample>_blast_hits.txt`
-- `results/14_diamond_nr/<sample>/<sample>_diamond_nr.tsv` — nr blastx hits.
-- `results/15_taxid/<sample>/<sample>_diamond_nr_named.tsv` — nr hits + names.
-- `results/16_rdrpscan/<sample>/`
+- `results/15_diamond_nr/<sample>/<sample>_diamond_nr.tsv` — nr blastx hits.
+- `results/16_taxid/<sample>/<sample>_diamond_nr_named.tsv` — nr hits + names.
+- `results/17_rdrpscan/<sample>/`
   - `<sample>_rdrpscan_diamond.tsv` — DIAMOND hits vs the RdRp-scan protein db
   - `<sample>_rdrpscan_hmm.tbl` — hmmsearch hits vs the RdRp HMM profiles
   - `<sample>_rdrp_candidate_contigs.fasta` — contigs flagged as candidate RdRps
-- `results/17_comparison/` — see below.
+- `results/18_comparison/` — see below.
 
 ### Comparing RdRp-scan vs DIAMOND-vs-nr (stage 17)
 
 Stages 14 and 16 take the **same** blastn-unknown contigs, so stage 17 partitions
-them and quantifies what each method recovers. It writes `results/17_comparison/`:
+them and quantifies what each method recovers. It writes `results/18_comparison/`:
 
 - `summary.tsv` — one row per sample:
   `sample, unknown_contigs, nr_hits, rdrp_diamond, rdrp_hmm, rdrp_total, both, nr_only, rdrp_only`
@@ -284,7 +285,7 @@ the real cluster environment.
   12 clears a sample's MEGAHIT dir before re-assembling; stage 13 skips chunks
   whose blast output already exists.
 - **One bad sample won't kill the batch:** in the looping (non-array) form,
-  stages 13/14/16 log `WARN: <sample> failed; continuing with next sample` and
+  stages 13/15/17 log `WARN: <sample> failed; continuing with next sample` and
   move on, rather than aborting the whole job.
 - **Fail-fast inputs:** stages that pair reads call `assert_pairs` first, so a
   malformed sample sheet stops the run immediately with a clear message.

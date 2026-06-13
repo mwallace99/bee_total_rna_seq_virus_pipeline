@@ -7,9 +7,9 @@
 #PBS -q normal
 #PBS -l storage=gdata/rg47+scratch/rg47
 # ============================================================================
-# 16 - RdRp-scan: find divergent / novel RNA viruses among the UNKNOWN contigs
+# 17 - RdRp-scan: find divergent / novel RNA viruses among the UNKNOWN contigs
 # ----------------------------------------------------------------------------
-# Runs on the SAME blastn-unknown contigs as stage 14 (DIAMOND-vs-nr), so the
+# Runs on the SAME blastn-unknown contigs as stage 15 (DIAMOND-vs-nr), so the
 # two approaches can be compared.
 #
 # Per sample (input results/13_blastn/<sample>/<sample>_unknown_contigs.fa):
@@ -19,7 +19,7 @@
 #   3. hmmscan of the ORFs vs the RdRp-scan HMM profile db.
 #   4. union of contigs hit by either -> <sample>_rdrp_candidate_contigs.fasta
 #
-# Output dir: results/16_rdrpscan/<sample>/
+# Output dir: results/17_rdrpscan/<sample>/
 #   <sample>_rdrpscan_diamond.tsv      diamond blastx hits (outfmt 6 + evalue/bitscore)
 #   <sample>_rdrpscan_hmm.tbl          hmmscan --tblout
 #   <sample>_orfs.faa                  translated ORFs
@@ -38,7 +38,7 @@ source "$CONDA_SH"
 conda activate "$CONDA_ENV_RDRP"
 
 BLASTN="${RESULTS_DIR}/13_blastn"
-OUT="${RESULTS_DIR}/16_rdrpscan"
+OUT="${RESULTS_DIR}/17_rdrpscan"
 mkdir -p "$OUT"
 
 # Fail loudly up front if a required tool is missing (otherwise the per-sample

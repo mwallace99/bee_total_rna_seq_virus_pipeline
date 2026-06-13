@@ -29,10 +29,13 @@ STAGES=(
     11_star_fastqc.pbs
     12_megahit.pbs
     13_blastn.pbs
-    14_blastx_diamond_nr.pbs
-    15_add_taxid.pbs
-    16_rdrpscan.pbs
-    17_compare_virus_search.pbs
+    # 14_blastn_add_names.pbs is intentionally NOT chained here: stage 13 already
+    # emits scientific names, so 14 only back-fills names onto blastn tables that
+    # lack them (e.g. older runs). Run it by hand when needed.
+    15_blastx_diamond_nr.pbs
+    16_add_taxid.pbs
+    17_rdrpscan.pbs
+    18_compare_virus_search.pbs
 )
 
 prev=""

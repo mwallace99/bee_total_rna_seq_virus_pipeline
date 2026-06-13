@@ -37,8 +37,8 @@ run mkdir -p \
     "${RESULTS_DIR}/05_concat_fastqc" "${RESULTS_DIR}/06_rrna" \
     "${RESULTS_DIR}/07_rrna_fastqc" "${RESULTS_DIR}/09_star" \
     "${RESULTS_DIR}/11_star_fastqc" "${RESULTS_DIR}/12_megahit" \
-    "${RESULTS_DIR}/13_blastn" "${RESULTS_DIR}/14_diamond_nr" \
-    "${RESULTS_DIR}/15_taxid" "${RESULTS_DIR}/16_rdrpscan"
+    "${RESULTS_DIR}/13_blastn" "${RESULTS_DIR}/15_diamond_nr" \
+    "${RESULTS_DIR}/16_taxid" "${RESULTS_DIR}/17_rdrpscan"
 
 # ---- RdRp-scan databases ----------------------------------------------------
 source "$CONDA_SH"

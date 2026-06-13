@@ -7,16 +7,16 @@
 #PBS -q normal
 #PBS -l storage=gdata/rg47
 # ============================================================================
-# 17 - Compare the two virus searches on the blastn-unknown contigs:
-#        stage 14  DIAMOND blastx vs nr     (standard similarity search)
-#        stage 16  RdRp-scan                (divergent / novel RdRp discovery)
+# 18 - Compare the two virus searches on the blastn-unknown contigs:
+#        stage 15  DIAMOND blastx vs nr     (standard similarity search)
+#        stage 17  RdRp-scan                (divergent / novel RdRp discovery)
 #
 # For every sample it partitions the unknown contigs into:
 #   both       hit by nr AND flagged by RdRp-scan
 #   nr_only    hit by nr but NOT flagged by RdRp-scan
 #   rdrp_only  flagged by RdRp-scan but NO nr hit   <-- candidate NOVEL viruses
 #
-# Outputs (results/17_comparison/):
+# Outputs (results/18_comparison/):
 #   summary.tsv                                  one row per sample (counts)
 #   <sample>/<sample>_both.txt
 #   <sample>/<sample>_nr_only.txt
@@ -33,9 +33,9 @@ source "$_d/lib/parse_samples.sh"
 cd "$PROJECT_DIR"
 
 BLASTN="${RESULTS_DIR}/13_blastn"
-DIAMOND="${RESULTS_DIR}/14_diamond_nr"
-RDRP="${RESULTS_DIR}/16_rdrpscan"
-OUT="${RESULTS_DIR}/17_comparison"
+DIAMOND="${RESULTS_DIR}/15_diamond_nr"
+RDRP="${RESULTS_DIR}/17_rdrpscan"
+OUT="${RESULTS_DIR}/18_comparison"
 mkdir -p "$OUT"
 
 SUMMARY="${OUT}/summary.tsv"

@@ -7,20 +7,22 @@
 #PBS -q normal
 #PBS -l storage=gdata/rg47+gdata/if89
 # ============================================================================
-# annotate_blastn_names.sh - add scientific names to EXISTING blastn output
+# 14 - Add scientific names to blastn hits (no re-BLAST)
 # ----------------------------------------------------------------------------
-# For blastn tables that carry the subject accession in column 2 (sseqid) but no
-# readable name (e.g. results produced before stage 13 added sscinames/stitle),
-# this maps each subject accession to its scientific name + title with
-# `blastdbcmd` (NO re-BLAST) and writes <input>_named.txt, appending two columns:
+# Maps the subject accession in column 2 (sseqid) of a blastn table to its
+# scientific name + title with `blastdbcmd`, writing <input>_named.txt with two
+# extra columns appended:
 #       ... <sscinames>\t<stitle>
 #
-# Usage (run from the repo dir; uses NT_DB_PATH/NT_DB_NAME + the BLAST env from
-# config.sh). Pass one or more blast TSV files:
+# Mainly for blastn tables that lack names (e.g. results produced before stage
+# 13 started emitting sscinames/stitle directly). For fresh stage-13 runs the
+# names are already in the table, so this stage is optional.
 #
-#   bash pbs/annotate_blastn_names.sh FILE [FILE ...]
-#   # e.g. every sample's possible-viral hits from an earlier run:
-#   bash pbs/annotate_blastn_names.sh \
+# Default (no args): annotate each sample's possible-viral hits under
+#   results/13_blastn/<sample>/<sample>_possible_viral_hits.txt
+# Or pass explicit files (e.g. an older run elsewhere):
+#   bash pbs/14_blastn_add_names.pbs FILE [FILE ...]
+#   bash pbs/14_blastn_add_names.pbs \
 #        /g/data/rg47/mw9045/BLAST/blast_results/*/*_possible_viral_hits.txt
 #
 # It prints, per file, how many subjects resolved to a name so you can tell at a
@@ -32,20 +34,25 @@ _d="${PBS_O_WORKDIR:-$PWD}"
 while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
 [ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
 source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
 cd "$PROJECT_DIR"
 
 source "$CONDA_SH"
 conda activate "$CONDA_ENV_BLAST"
 export BLASTDB="$NT_DB_PATH"
 
-# Files from positional args, or from `qsub -v FILES="f1 f2 ..."`.
+# Files from positional args, or `qsub -v FILES="f1 f2 ..."`, else default to
+# each sample's possible-viral hits from stage 13.
 if [ "$#" -gt 0 ]; then
     INPUTS=( "$@" )
 elif [ -n "${FILES:-}" ]; then
     read -r -a INPUTS <<< "$FILES"
 else
-    echo "Usage: $0 <blast_tsv> [<blast_tsv> ...]   (subject accession must be column 2)" >&2
-    exit 1
+    INPUTS=()
+    for s in $(list_samples); do
+        INPUTS+=( "${RESULTS_DIR}/13_blastn/${s}/${s}_possible_viral_hits.txt" )
+    done
+    [ ${#INPUTS[@]} -eq 0 ] && { echo "No inputs (empty sample sheet) and no files given." >&2; exit 1; }
 fi
 
 tmp="$(mktemp -d "${SCRATCH_BASE:-/tmp}/annot.XXXXXX")"

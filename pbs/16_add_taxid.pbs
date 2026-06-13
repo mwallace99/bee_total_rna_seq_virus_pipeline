@@ -7,10 +7,10 @@
 #PBS -q normal
 #PBS -l storage=gdata/rg47
 # ============================================================================
-# 15 - Annotate the DIAMOND-vs-nr hits with NCBI scientific names
+# 16 - Annotate the DIAMOND-vs-nr hits with NCBI scientific names
 # ----------------------------------------------------------------------------
 # Wraps blastx_add_taxid.r; needs $NAMES_TXT (taxid<TAB>name).
-# Output: results/15_taxid/<sample>/<sample>_diamond_nr_named.tsv
+# Output: results/16_taxid/<sample>/<sample>_diamond_nr_named.tsv
 # ============================================================================
 set -euo pipefail
 
@@ -29,8 +29,8 @@ if [ ! -f "$NAMES_TXT" ]; then
     exit 1
 fi
 
-DIAMOND="${RESULTS_DIR}/14_diamond_nr"
-OUT="${RESULTS_DIR}/15_taxid"
+DIAMOND="${RESULTS_DIR}/15_diamond_nr"
+OUT="${RESULTS_DIR}/16_taxid"
 mkdir -p "$OUT"
 
 for sample in $(list_samples); do

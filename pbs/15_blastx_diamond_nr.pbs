@@ -7,12 +7,12 @@
 #PBS -q normal
 #PBS -l storage=gdata/rg47+scratch/rg47
 # ============================================================================
-# 14 - DIAMOND blastx of the blastn-UNKNOWN contigs vs nr
+# 15 - DIAMOND blastx of the blastn-UNKNOWN contigs vs nr
 # ----------------------------------------------------------------------------
-# This is the "standard" sensitive translated search. Stage 16 (RdRp-scan) runs
+# This is the "standard" sensitive translated search. Stage 17 (RdRp-scan) runs
 # on the SAME unknown contigs so the two can be compared.
 #
-# Output (per sample): results/14_diamond_nr/<sample>/<sample>_diamond_nr.tsv
+# Output (per sample): results/15_diamond_nr/<sample>/<sample>_diamond_nr.tsv
 # outfmt columns match blastx_add_taxid.r:
 #   qseqid sseqid pident length evalue bitscore staxids
 # ============================================================================
@@ -29,7 +29,7 @@ source "$CONDA_SH"
 conda activate "$CONDA_ENV_BLAST"
 
 BLASTN="${RESULTS_DIR}/13_blastn"
-OUT="${RESULTS_DIR}/14_diamond_nr"
+OUT="${RESULTS_DIR}/15_diamond_nr"
 mkdir -p "$OUT"
 
 diamond_sample() {

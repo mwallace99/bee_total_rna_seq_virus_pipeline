@@ -15,7 +15,7 @@
 # STUDY is the prefix of your sample sheet: ${STUDY}_rna_samples.txt
 # NB: do NOT call this PROJECT - on NCI Gadi $PROJECT is a reserved variable that
 # holds your allocation project (e.g. rg47) and is read by nqstat / nci_account.
-STUDY="UKBombus"
+STUDY="NZApis2026"
 
 # Root of this checkout. Defaults to the directory containing config.sh, so the
 # scripts work from wherever the repo is cloned. Override if you run the stages
@@ -23,14 +23,19 @@ STUDY="UKBombus"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
 # Directory holding the raw paired-end fastq files listed in the sample sheet.
-RAW_DIR="${PROJECT_DIR}/raw"
+# NZApis2026: AGRF delivery sits on /g/data, not under the repo, so point at it
+# directly rather than symlinking into ${PROJECT_DIR}/raw.
+RAW_DIR="/g/data/rg47/mw9045/NZApis_virus/AGRF_NXGSQCAGRF26050366-1_23MN3YLT3"
 
 # The sample sheet: one fastq filename per line, R1 and R2 on separate lines.
 # Blank lines and lines starting with # are ignored. See example_rna_samples.txt.
 SAMPLE_SHEET="${PROJECT_DIR}/${STUDY}_rna_samples.txt"
 
-# All pipeline outputs live under here (relative), one sub-dir per stage.
-RESULTS_DIR="${PROJECT_DIR}/results"
+# All pipeline outputs live under here, one sub-dir per stage.
+# NB: the repo lives on /home (small quota), so results are sent to /g/data
+# alongside the raw data instead - a 20-sample total-RNAseq run far exceeds the
+# /home quota. Override per-run as needed.
+RESULTS_DIR="/g/data/rg47/mw9045/NZApis_virus/results"
 
 # ---- PBS / scheduler (NCI Gadi) ---------------------------------------------
 # These are referenced in docs / submit_all.sh. The #PBS directives inside each
@@ -50,13 +55,20 @@ CONDA_ENV_BLAST="/g/data/rg47/mw9045/miniconda3/envs/BLAST"   # blast/diamond/se
 CONDA_ENV_RDRP="${CONDA_ENV_BLAST}"                            # getorf(EMBOSS)/hmmer/diamond
 
 # ---- Host-depletion references ----------------------------------------------
-# rRNA bowtie2 index PREFIX (the path you pass to bowtie2 -x).
-RRNA_BT2_INDEX="/g/data/rg47/mw9045/UKBombus_rRNA_alignment/Bombus_rRNA"
+# Apis mellifera (NZApis2026). All host refs live under host_rrna/apis.
+# !! CONFIRM the exact filenames/prefix with:  ls /g/data/rg47/mw9045/host_rrna/apis
+# and adjust the four paths below to match.
+APIS_HOST_DIR="/g/data/rg47/mw9045/host_rrna/apis"
 
-# STAR host genome.
-STAR_GENOME_DIR="/g/data/rg47/mw9045/BombusSTARgenome/Star-output_Bombus"
-STAR_FASTA="/g/data/rg47/mw9045/BombusSTARgenome/GCF_910591885.1_iyBomTerr1.2_genomic.fa"
-STAR_GTF="/g/data/rg47/mw9045/BombusSTARgenome/GCF_910591885.1_iyBomTerr1.2_genomic.gtf"
+# rRNA bowtie2 index PREFIX (the path you pass to bowtie2 -x; the .bt2 files
+# sit alongside it, e.g. Apis_rRNA.1.bt2).
+RRNA_BT2_INDEX="${APIS_HOST_DIR}/Apis_rRNA"
+
+# STAR host genome. If STAR_GENOME_DIR is empty/not yet built, stage 08 builds it
+# from STAR_FASTA + STAR_GTF (Amel_HAv3.1 / GCF_003254395.2).
+STAR_GENOME_DIR="${APIS_HOST_DIR}/Star-output_Apis"
+STAR_FASTA="${APIS_HOST_DIR}/GCF_003254395.2_Amel_HAv3.1_genomic.fa"
+STAR_GTF="${APIS_HOST_DIR}/GCF_003254395.2_Amel_HAv3.1_genomic.gtf"
 STAR_SA_NBASES=13                # --genomeSAindexNbases (lower for small genomes)
 STAR_LIMIT_BAM_SORT_RAM=4249358420
 

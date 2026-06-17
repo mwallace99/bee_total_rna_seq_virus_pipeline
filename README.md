@@ -119,7 +119,7 @@ CONDA_ENV_RDRP=$CONDA_ENV_BLAST              # getorf / hmmer / diamond      (st
 Read QC, trimming, host/rRNA alignment and assembly:
 
 ```bash
-mamba create -n Beeviromics -c bioconda -c conda-forge \
+conda create -n Beeviromics -c bioconda -c conda-forge \
     fastqc trim-galore cutadapt bowtie2 star megahit pigz
 ```
 
@@ -130,7 +130,7 @@ RdRp-scan DB build. `CONDA_ENV_RDRP` defaults to this env, so it must contain th
 EMBOSS / HMMER tools too:
 
 ```bash
-mamba create -n BLAST -c bioconda -c conda-forge \
+conda create -n BLAST -c bioconda -c conda-forge \
     blast diamond hmmer emboss seqkit git \
     r-base r-dplyr r-tidyr r-readr r-argparse
 ```

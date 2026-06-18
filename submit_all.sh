@@ -80,8 +80,13 @@ if [ -n "${FROM:-}" ]; then
     echo "Starting from ${STAGES[0]} (FROM='$FROM'); earlier stages skipped."
 fi
 
+# START_DEP: make the FIRST submitted stage depend on an already-queued job,
+# e.g. to chain 15-18 onto a stage-13 array submitted by an earlier run:
+#   FROM=15_blastx START_DEP='afterokarray:171587169[].gadi-pbs' ./submit_all.sh
+# Pass the full PBS depend value (type:jobid). Use the form your PBS accepts.
 prev=""
 prev_is_array=0
+first=1
 for stage in "${STAGES[@]}"; do
     # Dependency on the PREVIOUS job: afterokarray if it was an array, else afterok.
     dep=()
@@ -91,7 +96,10 @@ for stage in "${STAGES[@]}"; do
         else
             dep=(-W "depend=afterok:${prev}")
         fi
+    elif [ "$first" -eq 1 ] && [ -n "${START_DEP:-}" ]; then
+        dep=(-W "depend=${START_DEP}")
     fi
+    first=0
 
     # Submit THIS stage as a grouped array if it is listed above.
     #  -r y       : PBS requires array jobs to be rerunable (Gadi defaults -r n).

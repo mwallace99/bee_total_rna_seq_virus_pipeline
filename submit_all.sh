@@ -33,9 +33,13 @@ NSAMPLES=$(list_samples | grep -c .)
 # and PBS_STORAGE default to $PROJECT, which Gadi sets automatically.
 QSUB_OPTS=(-P "$PBS_ACCOUNT" -l "storage=$PBS_STORAGE")
 
-# Stages submitted as a PBS array (one subjob per sample). The stage that
+# Stage 13 (blastn) runs on hugemem as a GROUPED array: BLAST_NGROUPS subjobs,
+# each warming the ~706 GB nt cache once and handling a slice of the samples
+# (see config.sh). Cap the group count at the sample count. The stage that
 # follows an array in the chain must depend on it with afterokarray (wait for
 # ALL subjobs), not the plain afterok used between single jobs.
+NGROUPS=${BLAST_NGROUPS:-5}
+[ "$NGROUPS" -le "$NSAMPLES" ] || NGROUPS=$NSAMPLES
 ARRAY_STAGES=" 13_blastn.pbs "
 
 STAGES=(
@@ -89,14 +93,15 @@ for stage in "${STAGES[@]}"; do
         fi
     fi
 
-    # Submit THIS stage as an array (one subjob per sample) if it is listed above.
+    # Submit THIS stage as a grouped array if it is listed above. Pass NGROUPS
+    # into the job (-v) so it knows its stride for slicing the sample list.
     arr=()
     this_is_array=0
     label=""
     if [[ "$ARRAY_STAGES" == *" $stage "* ]]; then
-        arr=(-J "1-${NSAMPLES}")
+        arr=(-J "1-${NGROUPS}" -v "NGROUPS=${NGROUPS}")
         this_is_array=1
-        label=" (array 1-${NSAMPLES})"
+        label=" (grouped array 1-${NGROUPS} over ${NSAMPLES} samples)"
     fi
 
     jid=$(qsub "${QSUB_OPTS[@]}" "${dep[@]}" "${arr[@]}" "pbs/${stage}")

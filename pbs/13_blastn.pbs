@@ -1,15 +1,23 @@
 #!/bin/bash
 #PBS -l ncpus=48
-#PBS -l mem=190gb
+#PBS -l mem=1470gb
 #PBS -l walltime=48:00:00
 #PBS -l wd
-#PBS -q normal
+#PBS -q hugemem
 #PBS -l storage=gdata/${PROJECT}+scratch/${PROJECT}+gdata/if89
 # ============================================================================
 # 13 - blastn of assembled contigs vs nt, then split into known / unknown /
 #      possible-viral sets. (Canonical replacement for the old per-sample
 #      1.2_blastn_*.pbs; chunked + memory-safe parallel, distilled from
 #      1.2c_idempotent_rerun_jobs.sh.)
+#
+# HARDWARE: this runs on the *hugemem* queue (1.5 TB RAM) on purpose. The nt
+# database is ~706 GB; a normal node (190 GB) can cache only a fraction of it
+# and blastn becomes I/O-bound on /g/data Lustre (~1 of 48 cores busy). On a
+# hugemem node all of nt fits in the page cache, so after a one-time warm-up
+# blastn is CPU-bound and ~10-50x faster. We warm the cache once per node and
+# (when run as a grouped array) process several samples per node so that warm
+# cache is reused rather than re-read on 20 separate nodes.
 #
 # Per sample, writes to results/13_blastn/<sample>/:
 #   <sample>_blast.txt                  merged blastn hits (cols 1-13 as before; 14 staxids 15 sscinames 16 stitle)
@@ -19,8 +27,17 @@
 #   <sample>_possible_viral_hits.txt    best hit per query in viral/unknown kingdoms
 #   <sample>_possible_viral_contigs.fasta
 #
-# Runs ALL samples sequentially by default. If submitted as a PBS array
-# (qsub -J 1-N), each task processes one sample.
+# NB: every contig is blasted - there is NO length/complexity pre-filter, so no
+# potential viral contig is ever dropped before the nt search.
+#
+# Submission modes:
+#   * No array  (qsub / submit_all without -J): one job blasts ALL samples
+#     sequentially on this node (warm cache reused across them).
+#   * Grouped array (qsub -J 1-G -v NGROUPS=G): G subjobs; subjob k blasts
+#     samples k, k+G, k+2G, ... so each node warms nt once and handles a slice
+#     of the samples. This is how submit_all.sh launches it.
+# Either way each chunk's output is written atomically and skipped if already
+# present, so a timed-out/failed task is safe to just re-submit (it resumes).
 # ============================================================================
 set -euo pipefail
 
@@ -41,7 +58,21 @@ MEGAHIT="${RESULTS_DIR}/12_megahit"
 RESULTS="${RESULTS_DIR}/13_blastn"
 mkdir -p "$RESULTS"
 
-# Concurrency: keep ncpus busy without exhausting RAM (see 1.2c rationale).
+# --- warm nt into page cache (hugemem only makes sense if we do this) --------
+# Read the nt volumes + taxdb sequentially once so the kernel caches them in
+# RAM; subsequent blastn calls then hit RAM instead of random-reading Lustre.
+# Sequential read of ~706 GB is minutes; set WARM_NT=0 to skip (e.g. on a
+# normal node where it won't fit anyway).
+if [ "${WARM_NT:-1}" = "1" ] && [ "$DRYRUN" != "1" ]; then
+    echo "[$(date)] warming nt cache from ${NT_DB_PATH} ..."
+    cat "${NT_DB_PATH}/${NT_DB_NAME}".* "${NT_DB_PATH}"/taxdb.* > /dev/null 2>&1 || true
+    echo "[$(date)] warm-up done"
+fi
+
+# Concurrency: with nt resident in RAM the search is CPU-bound, so fill the
+# node - MAX_PARALLEL chunks each on THREADS_PER_CHUNK threads ~= ncpus. The
+# parallel blastn processes share the same cached nt pages, so RAM cost does
+# not multiply.
 THREADS_PER_CHUNK=8
 MAX_PARALLEL=$(( ${PBS_NCPUS:-$THREADS} / THREADS_PER_CHUNK ))
 [ "$MAX_PARALLEL" -lt 1 ] && MAX_PARALLEL=1
@@ -120,8 +151,20 @@ blast_sample() {
 }
 
 mapfile -t SAMPLES < <(list_samples)
+nsamp=${#SAMPLES[@]}
+
 if [ -n "${PBS_ARRAY_INDEX:-}" ]; then
-    blast_sample "${SAMPLES[$((PBS_ARRAY_INDEX-1))]}"
+    # Grouped array: subjob k (1-based) handles samples k, k+G, k+2G, ...
+    # where G = NGROUPS (the array width). Defaults to one sample per subjob if
+    # NGROUPS is unset, which reproduces the plain -J 1-N (one sample) behaviour.
+    stride="${NGROUPS:-$nsamp}"
+    [ "$stride" -ge 1 ] || stride=1
+    rc=0
+    for (( i = PBS_ARRAY_INDEX - 1; i < nsamp; i += stride )); do
+        echo "[$(date)] >>> group ${PBS_ARRAY_INDEX}/${stride}: sample ${SAMPLES[$i]} ($((i+1))/${nsamp})"
+        blast_sample "${SAMPLES[$i]}" || { rc=1; echo "WARN: ${SAMPLES[$i]} failed; continuing" >&2; }
+    done
+    exit $rc
 else
     for s in "${SAMPLES[@]}"; do blast_sample "$s" || echo "WARN: ${s} failed; continuing with next sample" >&2; done
 fi

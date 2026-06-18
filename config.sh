@@ -105,6 +105,15 @@ RDRPSCAN_HMM="${RDRPSCAN_DIR}/Profile_db_and_alignments/RdRp_HMM_profile_CLUSTAL
 THREADS="${PBS_NCPUS:-8}"
 
 CHUNK_SIZE=1000                  # contigs per blastn chunk (memory control)
+
+# Stage 13 (blastn vs nt) runs on the hugemem queue as a grouped PBS array:
+# BLAST_NGROUPS subjobs, each warming the ~706 GB nt cache once and processing
+# a slice of the samples (sample k, k+G, ...). Fewer groups = more samples per
+# node = the warm cache is reused more (cheaper, less Lustre load) but less
+# wall-clock parallelism. ~4-5 is a good balance for ~20 samples. submit_all.sh
+# caps this at the sample count.
+BLAST_NGROUPS=5
+
 EVALUE_BLASTN="1e-5"
 EVALUE_DIAMOND="1e-5"
 EVALUE_HMM="1e-6"

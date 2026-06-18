@@ -8,7 +8,8 @@
 # Stage 13 (blastn) is submitted as a PBS job ARRAY, one subjob per sample
 # (qsub -J 1-N), so all samples blast in parallel across nodes instead of
 # serializing into a single 48h job. The next chained stage waits for the
-# whole array via depend=afterokarray. Each subjob is independently resumable:
+# whole array via depend=afterok on the array id (jobid[]) - Gadi's PBS has no
+# afterokarray type. Each subjob is independently resumable:
 # 13_blastn.pbs writes per-chunk outputs atomically and skips chunks already
 # done, so re-submitting a failed/timed-out array picks up where it left off.
 #
@@ -36,8 +37,8 @@ QSUB_OPTS=(-P "$PBS_ACCOUNT" -l "storage=$PBS_STORAGE")
 # Stage 13 (blastn) runs on hugemem as a GROUPED array: BLAST_NGROUPS subjobs,
 # each warming the ~706 GB nt cache once and handling a slice of the samples
 # (see config.sh). Cap the group count at the sample count. The stage that
-# follows an array in the chain must depend on it with afterokarray (wait for
-# ALL subjobs), not the plain afterok used between single jobs.
+# follows an array depends on it with afterok on the array id (jobid[]), which
+# on Gadi waits for ALL subjobs to finish OK.
 NGROUPS=${BLAST_NGROUPS:-5}
 [ "$NGROUPS" -le "$NSAMPLES" ] || NGROUPS=$NSAMPLES
 ARRAY_STAGES=" 13_blastn.pbs "
@@ -82,7 +83,7 @@ fi
 
 # START_DEP: make the FIRST submitted stage depend on an already-queued job,
 # e.g. to chain 15-18 onto a stage-13 array submitted by an earlier run:
-#   FROM=15_blastx START_DEP='afterokarray:171587169[].gadi-pbs' ./submit_all.sh
+#   FROM=15_blastx START_DEP='afterok:171587169[].gadi-pbs' ./submit_all.sh
 # Pass the full PBS depend value (type:jobid). Use the form your PBS accepts.
 prev=""
 first=1

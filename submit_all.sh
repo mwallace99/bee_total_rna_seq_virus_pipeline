@@ -85,17 +85,15 @@ fi
 #   FROM=15_blastx START_DEP='afterokarray:171587169[].gadi-pbs' ./submit_all.sh
 # Pass the full PBS depend value (type:jobid). Use the form your PBS accepts.
 prev=""
-prev_is_array=0
 first=1
 for stage in "${STAGES[@]}"; do
-    # Dependency on the PREVIOUS job: afterokarray if it was an array, else afterok.
+    # Dependency on the PREVIOUS job. Gadi's PBS has no afterokarray type;
+    # instead afterok on an array job id (jobid[]) waits for ALL its subjobs to
+    # finish OK, so the same afterok form works for both arrays and plain jobs
+    # (prev already carries the [] for an array).
     dep=()
     if [ -n "$prev" ]; then
-        if [ "$prev_is_array" -eq 1 ]; then
-            dep=(-W "depend=afterokarray:${prev}")
-        else
-            dep=(-W "depend=afterok:${prev}")
-        fi
+        dep=(-W "depend=afterok:${prev}")
     elif [ "$first" -eq 1 ] && [ -n "${START_DEP:-}" ]; then
         dep=(-W "depend=${START_DEP}")
     fi
@@ -119,7 +117,6 @@ for stage in "${STAGES[@]}"; do
     jid=$(qsub "${QSUB_OPTS[@]}" "${dep[@]}" "${arr[@]}" "pbs/${stage}")
     echo "Submitted ${stage}: ${jid}${label}"
     prev="$jid"
-    prev_is_array=$this_is_array
 done
 
 echo "All stages submitted as a dependency chain."

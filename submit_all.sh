@@ -93,13 +93,17 @@ for stage in "${STAGES[@]}"; do
         fi
     fi
 
-    # Submit THIS stage as a grouped array if it is listed above. Pass NGROUPS
-    # into the job (-v) so it knows its stride for slicing the sample list.
+    # Submit THIS stage as a grouped array if it is listed above.
+    #  -r y       : PBS requires array jobs to be rerunable (Gadi defaults -r n).
+    #  -J 1-G     : G subjobs.
+    #  -v ...     : pass NGROUPS (stride) into the job, and keep PROJECT/USER
+    #               exported (our -v would otherwise replace Gadi's default
+    #               `-v PROJECT`, leaving ${PROJECT} unset inside the job).
     arr=()
     this_is_array=0
     label=""
     if [[ "$ARRAY_STAGES" == *" $stage "* ]]; then
-        arr=(-J "1-${NGROUPS}" -v "NGROUPS=${NGROUPS}")
+        arr=(-r y -J "1-${NGROUPS}" -v "NGROUPS=${NGROUPS},PROJECT,USER")
         this_is_array=1
         label=" (grouped array 1-${NGROUPS} over ${NSAMPLES} samples)"
     fi

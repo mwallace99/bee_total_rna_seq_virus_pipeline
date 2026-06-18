@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BASE_DIR="/g/data/rg47/mw9045/BLAST"
+BASE_DIR="/g/data/${PROJECT}/${USER}/BLAST"
 
 BAD_SAMPLES=(
     "K10F"
@@ -29,28 +29,26 @@ for SAMPLE in "${BAD_SAMPLES[@]}"; do
     
     cat > "$PBS_FILE" << 'EOFPBS'
 #!/bin/bash
-#PBS -P rg47
 #PBS -l ncpus=4
 #PBS -l mem=32GB
 #PBS -l walltime=48:00:00
 #PBS -l wd
 #PBS -q normal
-#PBS -l storage=gdata/rg47+scratch/rg47+gdata/if89
 #PBS -N rerun_SAMPLE_PLACEHOLDER
 
-source /g/data/rg47/mw9045/miniconda3/etc/profile.d/conda.sh
-conda activate /g/data/rg47/mw9045/miniconda3/envs/BLAST
+source /g/data/${PROJECT}/${USER}/miniconda3/etc/profile.d/conda.sh
+conda activate /g/data/${PROJECT}/${USER}/miniconda3/envs/BLAST
 
 DB_PATH="/g/data/if89/data_library/blast_db/10082025"
 DB_NAME="nt"
-QUERY_DIR="/g/data/rg47/mw9045/BLAST/UKBombus_Megahit-contigs_MW"
-BASE_DIR="/g/data/rg47/mw9045/BLAST"
+QUERY_DIR="/g/data/${PROJECT}/${USER}/BLAST/Bombus_Megahit-contigs"
+BASE_DIR="/g/data/${PROJECT}/${USER}/BLAST"
 CHUNK_DIR="${BASE_DIR}/query_chunks"
 RESULTS_DIR="${BASE_DIR}/blast_results"
 CHUNK_SIZE=1000
 
 # Use scratch for ALL temporary operations
-SCRATCH_WORK="/scratch/rg47/mw9045/blast_rerun_SAMPLE_PLACEHOLDER_${PBS_JOBID}"
+SCRATCH_WORK="/scratch/${PROJECT}/${USER}/blast_rerun_SAMPLE_PLACEHOLDER_${PBS_JOBID}"
 mkdir -p "${SCRATCH_WORK}"
 
 export BLASTDB_LMDB_DISABLE=1
@@ -238,7 +236,9 @@ EOFPBS
     sed -i "s/SAMPLE_PLACEHOLDER/${SAMPLE}/g" "$PBS_FILE"
     
     if [ -f "$PBS_FILE" ]; then
-        JOB_ID=$(qsub "$PBS_FILE" 2>&1)
+        # Project defaults to $PROJECT; storage is injected here (the #PBS line
+        # in the generated script cannot expand shell variables).
+        JOB_ID=$(qsub -l "storage=gdata/${PROJECT}+scratch/${PROJECT}+gdata/if89" "$PBS_FILE" 2>&1)
         echo "  Job:  $JOB_ID"
     else
         echo "  ERROR: PBS file not created"

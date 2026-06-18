@@ -1,5 +1,5 @@
-# NZApis_rna_samples.txt - Apis (New Zealand) total RNA-seq, run 23MN3YLT3
-# AGRF_NXGSQCAGRF26050366-1_23MN3YLT3
+# Apis2026_rna_samples.txt - Apis total RNA-seq sample sheet
+# raw_delivery
 # One raw paired-end fastq filename per line; R1 and R2 on separate lines.
 # Sample ID = text before the first underscore (NegC, Z1A, ... Z24A).
 # Each sample has two lanes (L005, L006); they are concatenated at stage 04.

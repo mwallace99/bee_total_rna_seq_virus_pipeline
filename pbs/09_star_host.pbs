@@ -1,11 +1,10 @@
 #!/bin/bash
-#PBS -P rg47
 #PBS -l ncpus=48
 #PBS -l mem=100gb
 #PBS -l walltime=24:00:00
 #PBS -l wd
 #PBS -q normal
-#PBS -l storage=gdata/rg47
+#PBS -l storage=gdata/${PROJECT}
 # ============================================================================
 # 09 - Host depletion with STAR; keep the reads that DON'T map to the host
 # ----------------------------------------------------------------------------

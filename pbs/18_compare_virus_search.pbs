@@ -1,11 +1,10 @@
 #!/bin/bash
-#PBS -P rg47
 #PBS -l ncpus=1
 #PBS -l mem=8gb
 #PBS -l walltime=01:00:00
 #PBS -l wd
 #PBS -q normal
-#PBS -l storage=gdata/rg47
+#PBS -l storage=gdata/${PROJECT}
 # ============================================================================
 # 18 - Compare the two virus searches on the blastn-unknown contigs:
 #        stage 15  DIAMOND blastx vs nr     (standard similarity search)

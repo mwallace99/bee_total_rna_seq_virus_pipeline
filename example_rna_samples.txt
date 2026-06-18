@@ -1,5 +1,5 @@
 # Example sample sheet  ->  copy/rename to ${PROJECT}_rna_samples.txt
-# (with PROJECT set in config.sh; default PROJECT=UKBombus -> UKBombus_rna_samples.txt)
+# (with PROJECT set in config.sh; default PROJECT=Bombus -> Bombus_rna_samples.txt)
 #
 # One raw paired-end fastq filename per line, R1 and R2 on SEPARATE lines.
 # Files are looked up in $RAW_DIR (config.sh) unless the line is an absolute

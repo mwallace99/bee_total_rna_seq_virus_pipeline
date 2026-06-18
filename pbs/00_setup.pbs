@@ -1,11 +1,10 @@
 #!/bin/bash
-#PBS -P rg47
 #PBS -l ncpus=1
 #PBS -l mem=8gb
 #PBS -l walltime=02:00:00
 #PBS -l wd
 #PBS -q copyq
-#PBS -l storage=gdata/rg47+gdata/if89
+#PBS -l storage=gdata/${PROJECT}+gdata/if89
 # ============================================================================
 # 00 - One-time setup: results tree + RdRp-scan databases
 # ----------------------------------------------------------------------------

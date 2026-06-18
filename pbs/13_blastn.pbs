@@ -1,11 +1,10 @@
 #!/bin/bash
-#PBS -P rg47
 #PBS -l ncpus=48
 #PBS -l mem=190gb
 #PBS -l walltime=48:00:00
 #PBS -l wd
 #PBS -q normal
-#PBS -l storage=gdata/rg47+scratch/rg47+gdata/if89
+#PBS -l storage=gdata/${PROJECT}+scratch/${PROJECT}+gdata/if89
 # ============================================================================
 # 13 - blastn of assembled contigs vs nt, then split into known / unknown /
 #      possible-viral sets. (Canonical replacement for the old per-sample

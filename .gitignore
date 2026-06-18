@@ -1,0 +1,11 @@
+# R session artefacts
+.RData
+.Rhistory
+
+# PBS job stdout/stderr logs
+*.pbs.e*
+*.pbs.o*
+
+# Local run outputs and large data (these live on /g/data, not in git)
+Results/
+names.txt

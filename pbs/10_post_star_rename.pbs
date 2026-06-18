@@ -1,11 +1,10 @@
 #!/bin/bash
-#PBS -P rg47
 #PBS -l ncpus=4
 #PBS -l mem=16gb
 #PBS -l walltime=02:00:00
 #PBS -l wd
 #PBS -q normal
-#PBS -l storage=gdata/rg47
+#PBS -l storage=gdata/${PROJECT}
 # ============================================================================
 # 10 - Give STAR's unmapped mate files a .fq extension (for downstream tools)
 # ----------------------------------------------------------------------------

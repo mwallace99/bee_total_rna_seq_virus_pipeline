@@ -32,12 +32,12 @@ wherever possible.
 
 ## Quick start
 
-1. **Clone / copy the repo** to where you will run it (e.g. `/g/data/rg47/<you>/<project>`).
+1. **Clone / copy the repo** to where you will run it (e.g. `/g/data/$PROJECT/$USER/<run>`).
 2. **Put your raw fastqs** in `raw/` (or set `RAW_DIR` in `config.sh`).
 3. **Create the sample sheet** `${STUDY}_rna_samples.txt` — one fastq filename
    per line, R1 and R2 on separate lines. Copy `example_rna_samples.txt` as a
-   template. With the default `STUDY=UKBombus` the file is
-   `UKBombus_rna_samples.txt`.
+   template. With the default `STUDY=Bombus` the file is
+   `Bombus_rna_samples.txt`.
 4. **Edit `config.sh`** — project name, reference indexes, database paths, conda
    env paths, threads. Everything project-specific lives here.
 5. **Add `names.txt`** — tab-separated `taxid<TAB>scientific_name`, used to
@@ -96,7 +96,7 @@ number of R1 and R2 files or an entry whose mate can't be determined.
 | rRNA Bowtie2 index | `RRNA_BT2_INDEX` | index **prefix** (the `-x` value) |
 | Host STAR genome | `STAR_GENOME_DIR` | or `STAR_FASTA` + `STAR_GTF` to build with stage 08 |
 | `nt` BLAST database | `NT_DB_PATH`, `NT_DB_NAME` | dir holding `nt.*` + base name |
-| `nr` DIAMOND database | `NR_DMND` | `.dmnd`; default `/g/data/rg47/mw9045/BLAST/NR_db/nr.dmnd` |
+| `nr` DIAMOND database | `NR_DMND` | `.dmnd`; default `/g/data/${PROJECT}/${USER}/BLAST/NR_db/nr.dmnd` |
 | taxid → name table | `NAMES_TXT` | tab-separated `taxid<TAB>name` |
 | RdRp-scan databases | `RDRPSCAN_DIR` | **built automatically** by stage 00 |
 
@@ -153,7 +153,7 @@ modules**, add `fastqc` and `bowtie2` to the `Beeviromics` env and delete the
 `module load …` lines in the affected stages (01, 03, 05, 06, 07, 11).
 
 > The default paths in `config.sh` point at an existing Gadi install under
-> `/g/data/rg47/mw9045/…`. Change them to your own envs/DBs before running.
+> `/g/data/${PROJECT}/${USER}/…`. Change them to your own envs/DBs before running.
 
 ---
 

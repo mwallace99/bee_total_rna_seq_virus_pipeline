@@ -1,11 +1,10 @@
 #!/bin/bash
-#PBS -P rg47
 #PBS -l ncpus=1
 #PBS -l mem=8gb
 #PBS -l walltime=04:00:00
 #PBS -l wd
 #PBS -q normal
-#PBS -l storage=gdata/rg47+gdata/if89
+#PBS -l storage=gdata/${PROJECT}+gdata/if89
 # ============================================================================
 # 14 - Add scientific names to blastn hits (no re-BLAST)
 # ----------------------------------------------------------------------------
@@ -23,7 +22,7 @@
 # Or pass explicit files (e.g. an older run elsewhere):
 #   bash pbs/14_blastn_add_names.pbs FILE [FILE ...]
 #   bash pbs/14_blastn_add_names.pbs \
-#        /g/data/rg47/mw9045/BLAST/blast_results/*/*_possible_viral_hits.txt
+#        /g/data/${PROJECT}/${USER}/BLAST/blast_results/*/*_possible_viral_hits.txt
 #
 # It prints, per file, how many subjects resolved to a name so you can tell at a
 # glance whether the accession format matched.

@@ -1,11 +1,10 @@
 #!/bin/bash
-#PBS -P rg47
 #PBS -l ncpus=48
 #PBS -l mem=190gb
 #PBS -l walltime=24:00:00
 #PBS -l wd
 #PBS -q normal
-#PBS -l storage=gdata/rg47+scratch/rg47
+#PBS -l storage=gdata/${PROJECT}+scratch/${PROJECT}
 # ============================================================================
 # 17 - RdRp-scan: find divergent / novel RNA viruses among the UNKNOWN contigs
 # ----------------------------------------------------------------------------

@@ -14,8 +14,8 @@
 # ---- Project identity -------------------------------------------------------
 # STUDY is the prefix of your sample sheet: ${STUDY}_rna_samples.txt
 # NB: do NOT call this PROJECT - on NCI Gadi $PROJECT is a reserved variable that
-# holds your allocation project (e.g. rg47) and is read by nqstat / nci_account.
-STUDY="NZApis2026"
+# holds your allocation project (e.g. ab12) and is read by nqstat / nci_account.
+STUDY="Apis2026"
 
 # Root of this checkout. Defaults to the directory containing config.sh, so the
 # scripts work from wherever the repo is cloned. Override if you run the stages
@@ -23,9 +23,10 @@ STUDY="NZApis2026"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
 # Directory holding the raw paired-end fastq files listed in the sample sheet.
-# NZApis2026: AGRF delivery sits on /g/data, not under the repo, so point at it
-# directly rather than symlinking into ${PROJECT_DIR}/raw.
-RAW_DIR="/g/data/rg47/mw9045/NZApis_virus/AGRF_NXGSQCAGRF26050366-1_23MN3YLT3"
+# AGRF delivery sits on /g/data, not under the repo, so point at it directly
+# rather than symlinking into ${PROJECT_DIR}/raw. NB: the data tree on /g/data
+# is still named NZApis_virus (not renamed), so keep pointing at it here.
+RAW_DIR="/g/data/${PROJECT}/${USER}/NZApis_virus/AGRF_NXGSQCAGRF26050366-1_23MN3YLT3"
 
 # The sample sheet: one fastq filename per line, R1 and R2 on separate lines.
 # Blank lines and lines starting with # are ignored. See example_rna_samples.txt.
@@ -35,30 +36,30 @@ SAMPLE_SHEET="${PROJECT_DIR}/${STUDY}_rna_samples.txt"
 # NB: the repo lives on /home (small quota), so results are sent to /g/data
 # alongside the raw data instead - a 20-sample total-RNAseq run far exceeds the
 # /home quota. Override per-run as needed.
-RESULTS_DIR="/g/data/rg47/mw9045/NZApis_virus/results"
+RESULTS_DIR="/g/data/${PROJECT}/${USER}/NZApis_virus/results"
 
 # ---- PBS / scheduler (NCI Gadi) ---------------------------------------------
 # These are referenced in docs / submit_all.sh. The #PBS directives inside each
 # stage script cannot read shell variables, so if you change project/storage you
 # must also update the literal #PBS lines (they are identical in every stage).
-PBS_ACCOUNT="rg47"
-PBS_STORAGE="gdata/rg47+scratch/rg47+gdata/if89"
+PBS_ACCOUNT="${PROJECT}"
+PBS_STORAGE="gdata/${PROJECT}+scratch/${PROJECT}+gdata/if89"
 PBS_QUEUE="normal"
 
 # Scratch area for sort/tmp during BLAST (large, fast, purgeable).
-SCRATCH_BASE="/scratch/rg47/mw9045"
+SCRATCH_BASE="/scratch/${PROJECT}/${USER}"
 
 # ---- Conda environments -----------------------------------------------------
-CONDA_SH="/g/data/rg47/mw9045/miniconda3/etc/profile.d/conda.sh"
-CONDA_ENV="/g/data/rg47/mw9045/miniconda3/envs/Beeviromics"   # qc/trim/align/assemble
-CONDA_ENV_BLAST="/g/data/rg47/mw9045/miniconda3/envs/BLAST"   # blast/diamond/seqkit
+CONDA_SH="/g/data/${PROJECT}/${USER}/miniconda3/etc/profile.d/conda.sh"
+CONDA_ENV="/g/data/${PROJECT}/${USER}/miniconda3/envs/Beeviromics"   # qc/trim/align/assemble
+CONDA_ENV_BLAST="/g/data/${PROJECT}/${USER}/miniconda3/envs/BLAST"   # blast/diamond/seqkit
 CONDA_ENV_RDRP="${CONDA_ENV_BLAST}"                            # getorf(EMBOSS)/hmmer/diamond
 
 # ---- Host-depletion references ----------------------------------------------
-# Apis mellifera (NZApis2026). All host refs live under host_rrna/apis.
-# !! CONFIRM the exact filenames/prefix with:  ls /g/data/rg47/mw9045/host_rrna/apis
+# Apis mellifera (Apis2026). All host refs live under host_rrna/apis.
+# !! CONFIRM the exact filenames/prefix with:  ls /g/data/${PROJECT}/${USER}/host_rrna/apis
 # and adjust the four paths below to match.
-APIS_HOST_DIR="/g/data/rg47/mw9045/host_rrna/apis"
+APIS_HOST_DIR="/g/data/${PROJECT}/${USER}/host_rrna/apis"
 
 # rRNA bowtie2 index PREFIX (the path you pass to bowtie2 -x; the .bt2 files
 # sit alongside it, e.g. Apis_rRNA.1.bt2).
@@ -78,7 +79,7 @@ NT_DB_PATH="/g/data/if89/data_library/blast_db/10082025"
 NT_DB_NAME="nt"
 
 # DIAMOND protein nr database (.dmnd) for blastx of unknown contigs.
-NR_DMND="/g/data/rg47/mw9045/BLAST/NR_db/nr.dmnd"
+NR_DMND="/g/data/${PROJECT}/${USER}/BLAST/NR_db/nr.dmnd"
 
 # taxid -> scientific-name table (tab separated: taxid <TAB> name) used by the
 # blastx annotation R script.
@@ -89,7 +90,7 @@ NAMES_TXT="${PROJECT_DIR}/names.txt"
 # canonical databases below into RDRPSCAN_DIR/db (locating the source files
 # wherever they sit in the repo). The scan stage (16) uses these.
 RDRPSCAN_REPO_URL="https://github.com/JustineCharon/RdRp-scan"
-RDRPSCAN_DIR="/g/data/rg47/mw9045/RdRp-scan"
+RDRPSCAN_DIR="/g/data/${PROJECT}/${USER}/RdRp-scan"
 # DIAMOND db built by 00_setup from the RdRp-scan core protein fasta
 # (RdRp-scan_0.90.fasta), so it matches your local DIAMOND version.
 RDRPSCAN_DMND="${RDRPSCAN_DIR}/db/RdRp-scan.dmnd"

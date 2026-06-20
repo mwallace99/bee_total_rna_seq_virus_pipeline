@@ -63,7 +63,11 @@ for sample in $(list_samples); do
 
     # RdRp-scan hmmsearch: ORF target -> contig ID (strip _tbl<N> then _<orf#>)
     if [ -s "$rdrp_hmm" ]; then
-        grep -v '^#' "$rdrp_hmm" | awk '{n=$3; sub(/_tbl[0-9]+$/,"",n); sub(/_[0-9]+$/,"",n); print n}' \
+        # NB: a header-only .tbl (a sample with no hmm hits, e.g. the NegC
+        # control) makes `grep -v '^#'` match nothing and exit 1; under
+        # `set -o pipefail` that aborts the whole stage, so swallow the
+        # no-match exit here.
+        { grep -v '^#' "$rdrp_hmm" || true; } | awk '{n=$3; sub(/_tbl[0-9]+$/,"",n); sub(/_[0-9]+$/,"",n); print n}' \
             | sort -u > "${sdir}/.rdrp_hmm.ids"
     else : > "${sdir}/.rdrp_hmm.ids"; fi
 

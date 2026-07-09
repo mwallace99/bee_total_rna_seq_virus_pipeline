@@ -320,6 +320,8 @@ They are kept for reference; the canonical, config-driven blastn is now
 
 ## Credits
 
+Big thanks to James Damayo @joimes-d who provided the basis for this pipeline!
+
 RdRp-scan: Charon *et al.* (2022), *Virus Evolution* 8(2):veac082 —
 <https://github.com/JustineCharon/RdRp-scan>. Built on FastQC, Trim Galore,
 Bowtie2, STAR, MEGAHIT, BLAST+, DIAMOND, seqkit, EMBOSS, HMMER3 and R.

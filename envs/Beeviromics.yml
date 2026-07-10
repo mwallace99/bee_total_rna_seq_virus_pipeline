@@ -1,0 +1,27 @@
+# Environment 1 - Beeviromics (pipeline stages 01-12)
+# ----------------------------------------------------------------------------
+# Lean spec: only the tools the pipeline actually calls in stages 01-12, so it
+# re-solves on any platform. (The maintainer's real Gadi env is a shared
+# multi-project superset - iqtree, mafft, multiqc, an R/tidyverse stack, ...;
+# that exact build is preserved in envs/Beeviromics.lock.yml if you need it.)
+#
+# On NCI Gadi, fastqc and bowtie2 come from `module load fastqc|bowtie2`, so they
+# are technically redundant here; they are kept in the env so the pipeline also
+# runs on sites without those modules. cutadapt + pigz are trim-galore's runtime
+# deps (listed explicitly for clarity). STAR and megahit are the only env-only
+# tools in this range.
+#
+# Recreate:  conda env create -f envs/Beeviromics.yml
+# For a byte-for-byte copy of the Gadi build, use envs/Beeviromics.lock.yml.
+name: Beeviromics
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - fastqc
+  - trim-galore
+  - cutadapt
+  - bowtie2
+  - star
+  - megahit
+  - pigz

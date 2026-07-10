@@ -39,6 +39,41 @@ run mkdir -p \
     "${RESULTS_DIR}/13_blastn" "${RESULTS_DIR}/15_diamond_nr" \
     "${RESULTS_DIR}/16_taxid" "${RESULTS_DIR}/17_rdrpscan"
 
+# ---- taxid -> scientific-name table (names.txt) -----------------------------
+# Built once from the NCBI taxonomy dump; used by stage 16 to turn the
+# DIAMOND-vs-nr staxids into scientific names. The download needs internet, so
+# it belongs here on copyq. Skipped if $NAMES_TXT already exists (delete it to
+# force a refresh).
+if [ -s "$NAMES_TXT" ]; then
+    echo "names table already present: ${NAMES_TXT} ($(wc -l < "$NAMES_TXT") rows)"
+elif [ "$DRYRUN" = "1" ]; then
+    echo "+ (dryrun) download NCBI taxdump + build ${NAMES_TXT}"
+else
+    echo "Building taxid->name table -> ${NAMES_TXT}"
+    # Work in a temp dir on gdata: it is in this job's -l storage list, whereas
+    # /scratch is NOT mounted here and /home is quota-limited. Non-fatal: if the
+    # download/parse fails we warn and carry on (names.txt is only needed at
+    # stage 16, and must not block the RdRp-scan DB build below).
+    _url="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
+    _tax="$(mktemp -d "${RESULTS_DIR}/taxdump.XXXXXX")"
+    # names.dmp columns are delimited by '\t|\t' (and each line ends '\t|'), so a
+    # plain tab split gives: $1 tax_id, $3 name_txt, $5 unique_name, $7 name_class.
+    # Keep the scientific-name rows as taxid<TAB>name (the two-column table
+    # blastx_add_taxid.r expects). This split is portable across awk variants.
+    if ( cd "$_tax" \
+            && { wget -q "$_url" || curl -fsSL -o taxdump.tar.gz "$_url"; } \
+            && tar -xzf taxdump.tar.gz names.dmp \
+            && awk -F'\t' '$7=="scientific name"{print $1 "\t" $3}' \
+                   names.dmp > names.txt \
+            && mv names.txt "$NAMES_TXT" ); then
+        echo "names table: ${NAMES_TXT} ($(wc -l < "$NAMES_TXT") rows)"
+    else
+        echo "WARN: could not build ${NAMES_TXT} (download/parse failed); build it" \
+             "manually before running stage 16 — see README." >&2
+    fi
+    rm -rf "$_tax"
+fi
+
 # ---- RdRp-scan databases ----------------------------------------------------
 source "$CONDA_SH"
 conda activate "$CONDA_ENV_RDRP"

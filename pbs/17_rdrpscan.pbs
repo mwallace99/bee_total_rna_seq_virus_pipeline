@@ -45,7 +45,7 @@ mkdir -p "$OUT"
 for tool in getorf diamond hmmscan; do
     command -v "$tool" >/dev/null 2>&1 || {
         echo "ERROR: '$tool' not found in ${CONDA_ENV_RDRP}." >&2
-        echo "       Install it, e.g.: mamba install -n <env> -c bioconda emboss hmmer diamond" >&2
+        echo "       Install it, e.g.: conda install -n <env> -c conda-forge -c bioconda emboss hmmer diamond" >&2
         exit 1
     }
 done

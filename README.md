@@ -19,6 +19,7 @@ wherever possible.
 - [The sample sheet](#the-sample-sheet-project_rna_samplestxt)
 - [Inputs you provide](#inputs-you-provide)
 - [Software & conda environments](#software--conda-environments)
+- [BLAST databases & taxonomy](#blast-databases--taxonomy-important-caveat)
 - [Stages](#stages)
 - [Running it](#running-it-submission--walltime)
 - [Outputs](#outputs)
@@ -40,15 +41,16 @@ wherever possible.
    `Bombus_rna_samples.txt`.
 4. **Edit `config.sh`** — project name, reference indexes, database paths, conda
    env paths, threads. Everything project-specific lives here.
-5. **Add `names.txt`** — tab-separated `taxid<TAB>scientific_name`, used to
-   annotate the nr hits.
+5. **Point at your `nt` / `nr` databases** in `config.sh` — you must supply your
+   own (they are not shipped; see [BLAST databases & taxonomy](#blast-databases--taxonomy-important-caveat)).
 6. **Build the conda envs** (see [Software](#software--conda-environments)) and
    point `config.sh` at them.
 7. **Run setup once, then submit the pipeline:**
    ```bash
-   qsub pbs/00_setup.pbs          # build results tree + RdRp-scan databases
+   qsub pbs/00_setup.pbs          # results tree + RdRp-scan DBs + names.txt
    ./submit_all.sh                # submit stages 01..17 as a dependency chain
    ```
+   Stage 00 also downloads the NCBI taxonomy dump and builds `names.txt` for you.
    …or run / inspect a single stage:
    ```bash
    qsub pbs/06_rrna_bowtie2.pbs
@@ -96,8 +98,8 @@ number of R1 and R2 files or an entry whose mate can't be determined.
 | rRNA Bowtie2 index | `RRNA_BT2_INDEX` | index **prefix** (the `-x` value) |
 | Host STAR genome | `STAR_GENOME_DIR` | or `STAR_FASTA` + `STAR_GTF` to build with stage 08 |
 | `nt` BLAST database | `NT_DB_PATH`, `NT_DB_NAME` | dir holding `nt.*` + base name |
-| `nr` DIAMOND database | `NR_DMND` | `.dmnd`; default `/g/data/${PROJECT}/${USER}/BLAST/NR_db/nr.dmnd` |
-| taxid → name table | `NAMES_TXT` | tab-separated `taxid<TAB>name` |
+| `nr` DIAMOND database | `NR_DMND` | `.dmnd`; **build with taxonomy** — see [caveat](#blast-databases--taxonomy-important-caveat) |
+| taxid → name table | `NAMES_TXT` | tab-separated `taxid<TAB>name`; **stage 16 only** — see [caveat](#blast-databases--taxonomy-important-caveat) |
 | RdRp-scan databases | `RDRPSCAN_DIR` | **built automatically** by stage 00 |
 
 ---
@@ -114,12 +116,89 @@ CONDA_ENV_BLAST=/g/data/.../envs/BLAST       # blast / diamond / R          (sta
 CONDA_ENV_RDRP=$CONDA_ENV_BLAST              # getorf / hmmer / diamond      (stages 00, 16)
 ```
 
-### Environment 1 — `Beeviromics` (stages 01–12)
+### Recreate the environments (any machine)
 
-Read QC, trimming, host/rRNA alignment and assembly:
+The two environments are checked into the repo as portable spec files under
+[`envs/`](envs), so you don't have to copy anything off Gadi — build them fresh
+wherever you run the pipeline:
 
 ```bash
-conda create -n Beeviromics -c bioconda -c conda-forge \
+conda env create -f envs/Beeviromics.yml     # stages 01–12
+conda env create -f envs/BLAST.yml           # stages 00, 13–17
+```
+
+Then point `config.sh` at the new prefixes:
+
+```bash
+CONDA_SH=$(conda info --base)/etc/profile.d/conda.sh
+CONDA_ENV=$(conda info --base)/envs/Beeviromics
+CONDA_ENV_BLAST=$(conda info --base)/envs/BLAST
+```
+
+Two flavours of each env are committed under [`envs/`](envs):
+
+| File | What it is | Use it when |
+|------|------------|-------------|
+| `envs/Beeviromics.yml`, `envs/BLAST.yml` | lean, unpinned spec — only the tools the pipeline calls | recreating on **any** OS/arch — conda re-solves current builds |
+| `envs/Beeviromics.lock.yml`, `envs/BLAST.lock.yml` | full pinned export of the Gadi build (`linux-64`) | **byte-for-byte** reproduction on `linux-64` |
+
+The `.lock.yml` files are verbatim `conda env export` of the maintainer's working
+Gadi environments; the `.yml` specs are trimmed to the packages the pipeline
+actually uses.
+
+> **Why spec files and not a copy of the Gadi env?** A built conda env is *not*
+> relocatable — it bakes in absolute prefixes and platform-specific package
+> builds, so copying `envs/Beeviromics/` to another machine does not work. The
+> `*.yml` specs re-solve cleanly on any OS; the `*.lock.yml` pins reproduce the
+> exact `linux-64` build. (The lock files have had their absolute `prefix:` line
+> stripped; conda ignores it on import anyway.)
+>
+> **Heads-up on `Beeviromics`:** the maintainer's real env is a shared
+> multi-project env, so it carries far more than stages 01–12 need (iqtree, mafft,
+> multiqc, an R/tidyverse stack, …). The committed `Beeviromics.yml` is trimmed to
+> just the pipeline tools; the full original is preserved in
+> `Beeviromics.lock.yml` if you ever need to match it exactly.
+
+### Setting up conda on NCI Gadi (from scratch)
+
+If you don't already have a conda on Gadi, install **Miniconda under `/g/data`**
+(never `/home` — the envs are far bigger than the `/home` quota), then build the
+two envs from the committed specs:
+
+```bash
+# 1. install Miniconda into /g/data (do this on a login node)
+cd /g/data/${PROJECT}/${USER}
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh -b -p /g/data/${PROJECT}/${USER}/miniconda3
+source /g/data/${PROJECT}/${USER}/miniconda3/etc/profile.d/conda.sh
+
+# 2. build both pipeline envs from the repo
+conda env create -f envs/Beeviromics.yml     # or Beeviromics.lock.yml for exact pins
+conda env create -f envs/BLAST.yml           # or BLAST.lock.yml
+```
+
+Then set these three lines in `config.sh` to match (the defaults already assume
+exactly this layout, so if you used the paths above you're done):
+
+```bash
+CONDA_SH="/g/data/${PROJECT}/${USER}/miniconda3/etc/profile.d/conda.sh"
+CONDA_ENV="/g/data/${PROJECT}/${USER}/miniconda3/envs/Beeviromics"
+CONDA_ENV_BLAST="/g/data/${PROJECT}/${USER}/miniconda3/envs/BLAST"
+```
+
+Gadi compute nodes have **no internet**, so `conda env create` (which downloads
+packages) must be run on a **login node** or the `copyq` queue — not inside a
+compute-node job. The pipeline stages only ever `conda activate` an already-built
+env, which works fine offline. Tip: keep `conda activate` out of your
+`~/.bashrc` on Gadi — the stages source `$CONDA_SH` themselves.
+
+### Environment 1 — `Beeviromics` (stages 01–12)
+
+Read QC, trimming, host/rRNA alignment and assembly. Equivalent one-liner to
+`envs/Beeviromics.yml`:
+
+```bash
+conda create -n Beeviromics -c conda-forge -c bioconda \
     fastqc trim-galore cutadapt bowtie2 star megahit pigz
 ```
 
@@ -127,11 +206,11 @@ conda create -n Beeviromics -c bioconda -c conda-forge \
 
 Homology search, ORF calling, profile search, taxonomy annotation, and the
 RdRp-scan DB build. `CONDA_ENV_RDRP` defaults to this env, so it must contain the
-EMBOSS / HMMER tools too:
+EMBOSS / HMMER tools too. Equivalent one-liner to `envs/BLAST.yml`:
 
 ```bash
-conda create -n BLAST -c bioconda -c conda-forge \
-    blast diamond hmmer emboss seqkit git \
+conda create -n BLAST -c conda-forge -c bioconda \
+    blast diamond hmmer emboss seqkit parallel \
     r-base r-dplyr r-tidyr r-readr r-argparse
 ```
 
@@ -143,7 +222,7 @@ conda create -n BLAST -c bioconda -c conda-forge \
 | `Rscript` + `dplyr/tidyr/readr/argparse` | 15 | join nr hits to scientific names |
 | `getorf` (EMBOSS) | 16 | translate ORFs under viral genetic codes |
 | `hmmsearch` / `hmmpress` (HMMER3) | 00, 16 | RdRp HMM-profile search / press |
-| `git` | 00 | clone the RdRp-scan repository |
+| `git` | 00 | clone the RdRp-scan repository — **from the system / `module load git`, not the conda env** |
 
 ### Gadi environment modules
 
@@ -154,6 +233,98 @@ modules**, add `fastqc` and `bowtie2` to the `Beeviromics` env and delete the
 
 > The default paths in `config.sh` point at an existing Gadi install under
 > `/g/data/${PROJECT}/${USER}/…`. Change them to your own envs/DBs before running.
+
+---
+
+## BLAST databases & taxonomy (important caveat)
+
+### You bring your own `nt` / `nr` — they are **not** shipped
+
+The pipeline does **not** include (and cannot download for you) the two big
+reference databases; you must host your own and point `config.sh` at them:
+
+| DB | `config.sh` | Rough size | Get it |
+|----|-------------|-----------:|--------|
+| `nt` (blastn) | `NT_DB_PATH` + `NT_DB_NAME` | ~700 GB (uncompressed volumes) | `update_blastdb.pl --decompress nt` |
+| `nr` DIAMOND | `NR_DMND` | ~200 GB `.dmnd` | build from `nr.gz` with `diamond makedb` (below) |
+
+These are hundreds of GB each, so they belong on a large shared filesystem
+(`/g/data`, scratch, lab storage) — **not** in the repo or your `/home`. On NCI
+Gadi the community `if89` project already hosts a maintained `nt` (the default
+`NT_DB_PATH` points at it), so you may only need to build `nr`. Elsewhere you
+download both once and reuse them across projects. Stage 13 assumes `nt` fits in
+a hugemem node's page cache (~700 GB → the `hugemem` queue); size your hardware
+accordingly.
+
+### Taxonomy metadata must travel *with* the databases
+
+The taxonomy annotation — scientific names, and the whole known/**viral** split in
+stage 13 — depends on taxonomy metadata that lives *alongside* the sequence
+databases, **not** in the `.nin`/`.dmnd` files themselves. If it's missing, the
+pipeline still runs but silently mislabels everything.
+
+### `nt` needs the `taxdb.*` files (blastn, stages 13 & 14)
+
+Stage 13 requests `staxids sscinames sskingdoms stitle` from `blastn`, and stages
+13/14 `export BLASTDB="$NT_DB_PATH"`. For those columns to resolve, the two
+**`taxdb.btd`** and **`taxdb.bti`** files must sit in `NT_DB_PATH` next to the
+`nt.*` volumes. Without them, `blastn` returns `N/A` for `sscinames`/`sskingdoms`
+— and because the stage-13 viral filter *keeps* any hit whose kingdom is
+`Viruses`/`Unclassified`/`N/A`/`Other`/empty, **every** hit falls through and
+`*_possible_viral_contigs.fasta` becomes meaningless. So make sure they're there:
+
+```bash
+cd "$NT_DB_PATH"
+wget https://ftp.ncbi.nlm.nih.gov/blast/db/taxdb.tar.gz
+tar -xzf taxdb.tar.gz          # -> taxdb.btd, taxdb.bti
+# (update_blastdb.pl --decompress taxdb  does the same if you have BLAST+ handy)
+```
+
+The stage-13 cache warm-up already reads `taxdb.*`, so a quick sanity check is
+that `ls "$NT_DB_PATH"/taxdb.*` lists both files before you submit.
+
+### `nr` DIAMOND db needs taxonomy baked in (stage 15)
+
+Stage 15 asks DIAMOND for `staxids`. DIAMOND can only emit those if `nr.dmnd` was
+built **with** the NCBI taxonomy maps:
+
+```bash
+diamond makedb --in nr.gz -d nr \
+    --taxonmap prot.accession2taxid.FULL.gz \
+    --taxonnodes nodes.dmp --taxonnames names.dmp
+```
+
+If your `.dmnd` was built without them, `staxids` comes back empty and stage 16
+has nothing to annotate.
+
+### `names.txt` — do we still need it?
+
+**Short answer: yes, as the pipeline is currently wired — but only for stage 16,
+and you no longer have to build it by hand.** `names.txt` (tab-separated
+`taxid<TAB>name`, ~90 MB, git-ignored) is used by **exactly one place**:
+`blastx_add_taxid.r`, called by stage 16 to turn the `staxids` from the
+DIAMOND-vs-nr search into scientific names. Stage 16 hard-errors if `NAMES_TXT`
+is missing. Everywhere else, names now come straight from the databases — stage
+13 from `taxdb.*`, stage 14 from `blastdbcmd` — so `names.txt` is **not**
+involved in the blastn path at all.
+
+**Stage 00 now builds it for you** from the NCBI taxonomy dump (it runs on
+`copyq`, which has internet), skipping the download if `$NAMES_TXT` already
+exists. So the normal path is: just run `qsub pbs/00_setup.pbs` and forget about
+it. If you ever need to build it manually, that's all stage 00 does:
+
+```bash
+wget https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz
+tar -xzf taxdump.tar.gz names.dmp
+# names.dmp columns are '\t|\t'-delimited: a plain tab split gives $1 tax_id,
+# $3 name_txt, $7 name_class. Keep the scientific names, as taxid<TAB>name.
+awk -F'\t' '$7=="scientific name"{print $1 "\t" $3}' names.dmp > names.txt
+```
+
+**To drop `names.txt` entirely:** build `nr.dmnd` with `--taxonnames names.dmp`
+(above), add `sscinames` to stage 15's `--outfmt`, and DIAMOND will emit the
+names directly — making stage 16 and the R join redundant. That's a small
+pipeline change; left as-is for now so existing `nr.dmnd` builds keep working.
 
 ---
 
@@ -299,7 +470,8 @@ the real cluster environment.
 ```
 config.sh                          # all paths / refs / DBs / tuning (edit this)
 example_rna_samples.txt            # sample-sheet template
-names.txt                          # taxid<TAB>name table (you provide)
+envs/Beeviromics.yml, BLAST.yml    # conda env specs (conda env create -f …)
+names.txt                          # taxid<TAB>name table (auto-built by stage 00; stage 16 only)
 lib/parse_samples.sh               # sample-sheet helpers (sourced by every stage)
 blastx_add_taxid.r                 # nr-hit taxonomy annotation (parameterised by --names)
 pbs/00_setup.pbs … pbs/17_*.pbs    # pipeline stages

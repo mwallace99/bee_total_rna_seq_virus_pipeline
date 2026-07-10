@@ -54,9 +54,8 @@ else
     [ ${#INPUTS[@]} -eq 0 ] && { echo "No inputs (empty sample sheet) and no files given." >&2; exit 1; }
 fi
 
-# Small scratch for accession-id lists. Use RESULTS_DIR (gdata, in this job's
-# -l storage) rather than SCRATCH_BASE: /scratch is not in this stage's storage
-# line, so writing there would fail on Gadi.
+# Small temp dir for accession-id lists, on gdata (in this stage's -l storage;
+# /scratch is not, so it can't be used here).
 tmp="$(mktemp -d "${RESULTS_DIR}/annot.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 

@@ -59,7 +59,7 @@ else
     # names.dmp columns are delimited by '\t|\t' (and each line ends '\t|'), so a
     # plain tab split gives: $1 tax_id, $3 name_txt, $5 unique_name, $7 name_class.
     # Keep the scientific-name rows as taxid<TAB>name (the two-column table
-    # blastx_add_taxid.r expects). This split is portable across awk variants.
+    # blastx_add_taxid.r expects).
     if ( cd "$_tax" \
             && { wget -q "$_url" || curl -fsSL -o taxdump.tar.gz "$_url"; } \
             && tar -xzf taxdump.tar.gz names.dmp \

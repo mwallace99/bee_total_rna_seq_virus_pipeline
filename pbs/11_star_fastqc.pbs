@@ -1,0 +1,27 @@
+#!/bin/bash
+#PBS -l ncpus=10
+#PBS -l mem=100gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}
+# ============================================================================
+# 11 - FastQC on the host-depleted (STAR unmapped) reads
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+module load fastqc
+
+STAR_OUT="${RESULTS_DIR}/09_star"
+OUT="${RESULTS_DIR}/11_star_fastqc"
+mkdir -p "$OUT"
+
+echo "Running FastQC on STAR-unmapped reads -> ${OUT}"
+run bash -c "fastqc -t '$THREADS' -q -o '$OUT' '$STAR_OUT'/*/*Unmapped.out.mate*.fq"

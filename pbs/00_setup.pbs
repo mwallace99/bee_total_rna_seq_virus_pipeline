@@ -1,0 +1,122 @@
+#!/bin/bash
+#PBS -l ncpus=1
+#PBS -l mem=8gb
+#PBS -l walltime=02:00:00
+#PBS -l wd
+#PBS -q copyq
+#PBS -l storage=gdata/${PROJECT}+gdata/if89
+# ============================================================================
+# 00 - One-time setup: results tree + RdRp-scan databases
+# ----------------------------------------------------------------------------
+# - Creates the results/ directory tree.
+# - Clones the RdRp-scan repo (if absent) and builds, into $RDRPSCAN_DIR/db:
+#     * a DIAMOND db (RdRp-scan.dmnd) from the repo's RdRp core protein FASTA,
+#       built with YOUR local diamond so versions match;
+#     * verifies the repo's pre-pressed RdRp HMM profile db (for hmmscan).
+# Safe to re-run: existing, up-to-date artifacts are left in place.
+#
+# Runs on the *copyq* queue because the git clone needs internet, which on Gadi
+# is only available from copyq (compute nodes are offline). The DB build is
+# light (small FASTA), so one CPU on copyq is plenty. If you have already cloned
+# RdRp-scan by other means, the clone is skipped and you can run this anywhere.
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+cd "$PROJECT_DIR"
+
+# ---- results tree -----------------------------------------------------------
+echo "Creating results tree under ${RESULTS_DIR}"
+run mkdir -p \
+    "${RESULTS_DIR}/01_raw_fastqc" "${RESULTS_DIR}/02_trimmed" \
+    "${RESULTS_DIR}/03_trimmed_fastqc" "${RESULTS_DIR}/04_concat" \
+    "${RESULTS_DIR}/05_concat_fastqc" "${RESULTS_DIR}/06_rrna" \
+    "${RESULTS_DIR}/07_rrna_fastqc" "${RESULTS_DIR}/09_star" \
+    "${RESULTS_DIR}/11_star_fastqc" "${RESULTS_DIR}/12_megahit" \
+    "${RESULTS_DIR}/13_blastn" "${RESULTS_DIR}/15_diamond_nr" \
+    "${RESULTS_DIR}/16_taxid" "${RESULTS_DIR}/17_rdrpscan"
+
+# ---- taxid -> scientific-name table (names.txt) -----------------------------
+# Built once from the NCBI taxonomy dump; used by stage 16 to turn the
+# DIAMOND-vs-nr staxids into scientific names. The download needs internet, so
+# it belongs here on copyq. Skipped if $NAMES_TXT already exists (delete it to
+# force a refresh).
+if [ -s "$NAMES_TXT" ]; then
+    echo "names table already present: ${NAMES_TXT} ($(wc -l < "$NAMES_TXT") rows)"
+elif [ "$DRYRUN" = "1" ]; then
+    echo "+ (dryrun) download NCBI taxdump + build ${NAMES_TXT}"
+else
+    echo "Building taxid->name table -> ${NAMES_TXT}"
+    # Work in a temp dir on gdata: it is in this job's -l storage list, whereas
+    # /scratch is NOT mounted here and /home is quota-limited. Non-fatal: if the
+    # download/parse fails we warn and carry on (names.txt is only needed at
+    # stage 16, and must not block the RdRp-scan DB build below).
+    _url="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
+    _tax="$(mktemp -d "${RESULTS_DIR}/taxdump.XXXXXX")"
+    # names.dmp columns are delimited by '\t|\t' (and each line ends '\t|'), so a
+    # plain tab split gives: $1 tax_id, $3 name_txt, $5 unique_name, $7 name_class.
+    # Keep the scientific-name rows as taxid<TAB>name (the two-column table
+    # blastx_add_taxid.r expects).
+    if ( cd "$_tax" \
+            && { wget -q "$_url" || curl -fsSL -o taxdump.tar.gz "$_url"; } \
+            && tar -xzf taxdump.tar.gz names.dmp \
+            && awk -F'\t' '$7=="scientific name"{print $1 "\t" $3}' \
+                   names.dmp > names.txt \
+            && mv names.txt "$NAMES_TXT" ); then
+        echo "names table: ${NAMES_TXT} ($(wc -l < "$NAMES_TXT") rows)"
+    else
+        echo "WARN: could not build ${NAMES_TXT} (download/parse failed); build it" \
+             "manually before running stage 16; see README." >&2
+    fi
+    rm -rf "$_tax"
+fi
+
+# ---- RdRp-scan databases ----------------------------------------------------
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_RDRP"
+
+if [ ! -d "$RDRPSCAN_DIR/.git" ] && [ -z "$(ls -A "$RDRPSCAN_DIR" 2>/dev/null || true)" ]; then
+    echo "Cloning RdRp-scan -> ${RDRPSCAN_DIR}"
+    run git clone "$RDRPSCAN_REPO_URL" "$RDRPSCAN_DIR"
+else
+    echo "RdRp-scan already present at ${RDRPSCAN_DIR}"
+fi
+
+DB_OUT="${RDRPSCAN_DIR}/db"
+mkdir -p "$DB_OUT"
+
+# --- DIAMOND db: build from the RdRp-scan core protein FASTA ---
+SRC_FASTA="$(find "$RDRPSCAN_DIR" -name 'RdRp-scan_*.fasta' ! -name '*CLUSTALO*' ! -name '*motifs*' | sort | head -n1 || true)"
+if [ -z "$SRC_FASTA" ]; then
+    echo "WARNING: could not find RdRp-scan core protein FASTA; set RDRPSCAN_DMND manually." >&2
+else
+    echo "Building DIAMOND db from ${SRC_FASTA}"
+    run diamond makedb --in "$SRC_FASTA" --db "${RDRPSCAN_DMND%.dmnd}" --threads "${PBS_NCPUS:-$THREADS}"
+fi
+
+# --- HMM profile db: the repo ships it PRE-PRESSED (.h3{f,i,m,p}) for hmmscan,
+#     with no plain base file. Just locate the pressed db and verify it matches
+#     RDRPSCAN_HMM; only press if (unusually) an un-pressed base db is present. ---
+SRC_HMM_PRESSED="$(find "$RDRPSCAN_DIR" -name '*.h3m' | sort | head -n1 || true)"
+if [ -n "$SRC_HMM_PRESSED" ]; then
+    HMM_PREFIX="${SRC_HMM_PRESSED%.h3m}"
+    echo "Found pre-pressed HMM profile db: ${HMM_PREFIX}"
+    if [ "$HMM_PREFIX" != "$RDRPSCAN_HMM" ]; then
+        echo "NOTE: RDRPSCAN_HMM in config.sh is '${RDRPSCAN_HMM}'."
+        echo "      The repo's pressed db is at '${HMM_PREFIX}'; update config.sh if they differ."
+    fi
+else
+    SRC_HMM_BASE="$(find "$RDRPSCAN_DIR" -name 'RdRp_HMM_profile*.db' ! -name '*.h3*' | sort | head -n1 || true)"
+    if [ -n "$SRC_HMM_BASE" ]; then
+        echo "Pressing HMM profile db ${SRC_HMM_BASE}"
+        run hmmpress -f "$SRC_HMM_BASE"
+        [ "$SRC_HMM_BASE" = "$RDRPSCAN_HMM" ] || echo "NOTE: set RDRPSCAN_HMM=${SRC_HMM_BASE} in config.sh"
+    else
+        echo "WARNING: no HMM profile db (.h3m or base .db) found under ${RDRPSCAN_DIR}; set RDRPSCAN_HMM manually." >&2
+    fi
+fi
+
+echo "Setup complete."

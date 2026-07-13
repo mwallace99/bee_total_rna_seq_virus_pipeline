@@ -1,0 +1,30 @@
+# Environment 2 - BLAST (pipeline stages 00, 13-17)
+# ----------------------------------------------------------------------------
+# Lean spec (`--from-history` style) for the BLAST/DIAMOND/R + EMBOSS/HMMER tools
+# used in stages 00 and 13-17; it re-solves on any platform. CONDA_ENV_RDRP
+# defaults to this env, so it also carries the EMBOSS / HMMER tools. conda-forge
+# and bioconda cover every dependency here. The exact pinned Gadi build (with its
+# full original channel list) is in envs/BLAST.lock.yml.
+#
+# NB: `git` (used by stage 00 to clone RdRp-scan) is NOT in this env - on Gadi it
+# comes from the system / `module load git`. If your machine has no system git,
+# add `- git` below so the env is self-contained.
+#
+# Recreate:  conda env create -f envs/BLAST.yml
+# For an exact, pinned copy of the Gadi build, use envs/BLAST.lock.yml.
+name: BLAST
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - diamond
+  - blast
+  - seqkit
+  - r-base
+  - r-dplyr
+  - r-readr
+  - r-argparse
+  - r-tidyr
+  - parallel
+  - hmmer
+  - emboss

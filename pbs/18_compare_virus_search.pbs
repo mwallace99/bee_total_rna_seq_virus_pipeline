@@ -1,0 +1,109 @@
+#!/bin/bash
+#PBS -l ncpus=1
+#PBS -l mem=8gb
+#PBS -l walltime=01:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}
+# ============================================================================
+# 18 - Compare the two virus searches on the blastn-unknown contigs:
+#        stage 15  DIAMOND blastx vs nr     (standard similarity search)
+#        stage 17  RdRp-scan                (divergent / novel RdRp discovery)
+#
+# For every sample it partitions the unknown contigs into:
+#   both       hit by nr AND flagged by RdRp-scan
+#   nr_only    hit by nr but NOT flagged by RdRp-scan
+#   rdrp_only  flagged by RdRp-scan but NO nr hit   <-- candidate NOVEL viruses
+#
+# Outputs (results/18_comparison/):
+#   summary.tsv                                  one row per sample (counts)
+#   <sample>/<sample>_both.txt
+#   <sample>/<sample>_nr_only.txt
+#   <sample>/<sample>_rdrp_only.txt
+#   <sample>/<sample>_rdrp_only_contigs.fasta    the novel-candidate sequences
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+BLASTN="${RESULTS_DIR}/13_blastn"
+DIAMOND="${RESULTS_DIR}/15_diamond_nr"
+RDRP="${RESULTS_DIR}/17_rdrpscan"
+OUT="${RESULTS_DIR}/18_comparison"
+mkdir -p "$OUT"
+
+SUMMARY="${OUT}/summary.tsv"
+printf 'sample\tunknown_contigs\tnr_hits\trdrp_diamond\trdrp_hmm\trdrp_total\tboth\tnr_only\trdrp_only\n' > "$SUMMARY"
+
+for sample in $(list_samples); do
+    unknown="${BLASTN}/${sample}/${sample}_unknown_contigs.fa"
+    nr_tsv="${DIAMOND}/${sample}/${sample}_diamond_nr.tsv"
+    rdrp_dmnd="${RDRP}/${sample}/${sample}_rdrpscan_diamond.tsv"
+    rdrp_hmm="${RDRP}/${sample}/${sample}_rdrpscan_hmm.tbl"
+    sdir="${OUT}/${sample}"
+    mkdir -p "$sdir"
+
+    # contig-ID sets (sorted, unique) -------------------------------------
+    # unknown contigs = the shared denominator
+    n_unknown=0
+    [ -s "$unknown" ] && n_unknown=$(grep -c '^>' "$unknown" || true)
+
+    # nr: query IDs with a diamond-vs-nr hit
+    if [ -s "$nr_tsv" ]; then cut -f1 "$nr_tsv" | sort -u > "${sdir}/.nr.ids"
+    else : > "${sdir}/.nr.ids"; fi
+
+    # RdRp-scan diamond-vs-RdRp-db: query IDs
+    if [ -s "$rdrp_dmnd" ]; then cut -f1 "$rdrp_dmnd" | sort -u > "${sdir}/.rdrp_dmnd.ids"
+    else : > "${sdir}/.rdrp_dmnd.ids"; fi
+
+    # RdRp-scan hmmsearch: ORF target -> contig ID (strip _tbl<N> then _<orf#>)
+    if [ -s "$rdrp_hmm" ]; then
+        # NB: a header-only .tbl (a sample with no hmm hits, e.g. the NegC
+        # control) makes `grep -v '^#'` match nothing and exit 1; under
+        # `set -o pipefail` that aborts the whole stage, so swallow the
+        # no-match exit here.
+        { grep -v '^#' "$rdrp_hmm" || true; } | awk '{n=$3; sub(/_tbl[0-9]+$/,"",n); sub(/_[0-9]+$/,"",n); print n}' \
+            | sort -u > "${sdir}/.rdrp_hmm.ids"
+    else : > "${sdir}/.rdrp_hmm.ids"; fi
+
+    # RdRp-scan union (diamond OR hmm)
+    sort -u "${sdir}/.rdrp_dmnd.ids" "${sdir}/.rdrp_hmm.ids" > "${sdir}/.rdrp.ids"
+
+    # partition nr vs RdRp-scan -------------------------------------------
+    comm -12 "${sdir}/.nr.ids" "${sdir}/.rdrp.ids" > "${sdir}/${sample}_both.txt"
+    comm -23 "${sdir}/.nr.ids" "${sdir}/.rdrp.ids" > "${sdir}/${sample}_nr_only.txt"
+    comm -13 "${sdir}/.nr.ids" "${sdir}/.rdrp.ids" > "${sdir}/${sample}_rdrp_only.txt"
+
+    # pull the novel-candidate sequences (RdRp-scan only) -----------------
+    if [ -s "${sdir}/${sample}_rdrp_only.txt" ] && [ -s "$unknown" ]; then
+        awk 'BEGIN{while((getline l < "'"${sdir}/${sample}_rdrp_only.txt"'")>0) c[l]=1}
+             /^>/{h=substr($1,2); keep=(h in c)} {if(keep) print}' \
+            "$unknown" > "${sdir}/${sample}_rdrp_only_contigs.fasta"
+    else
+        : > "${sdir}/${sample}_rdrp_only_contigs.fasta"
+    fi
+
+    # counts ---------------------------------------------------------------
+    n_nr=$(grep -c . "${sdir}/.nr.ids" || true)
+    n_rd_d=$(grep -c . "${sdir}/.rdrp_dmnd.ids" || true)
+    n_rd_h=$(grep -c . "${sdir}/.rdrp_hmm.ids" || true)
+    n_rd=$(grep -c . "${sdir}/.rdrp.ids" || true)
+    n_both=$(grep -c . "${sdir}/${sample}_both.txt" || true)
+    n_nronly=$(grep -c . "${sdir}/${sample}_nr_only.txt" || true)
+    n_rdonly=$(grep -c . "${sdir}/${sample}_rdrp_only.txt" || true)
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$sample" "$n_unknown" "$n_nr" "$n_rd_d" "$n_rd_h" "$n_rd" "$n_both" "$n_nronly" "$n_rdonly" >> "$SUMMARY"
+
+    rm -f "${sdir}"/.nr.ids "${sdir}"/.rdrp_dmnd.ids "${sdir}"/.rdrp_hmm.ids "${sdir}"/.rdrp.ids
+    echo "${sample}: nr=${n_nr}, rdrp=${n_rd} (diamond ${n_rd_d} / hmm ${n_rd_h}), rdrp_only=${n_rdonly}"
+done
+
+echo
+echo "Summary written to ${SUMMARY}:"
+column -t -s $'\t' "$SUMMARY" || cat "$SUMMARY"

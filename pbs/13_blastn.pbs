@@ -1,0 +1,176 @@
+#!/bin/bash
+#PBS -l ncpus=48
+#PBS -l mem=1470gb
+#PBS -l walltime=48:00:00
+#PBS -l wd
+#PBS -q hugemem
+#PBS -l storage=gdata/${PROJECT}+scratch/${PROJECT}+gdata/if89
+# ============================================================================
+# 13 - blastn of assembled contigs vs nt, then split into known / unknown /
+#      possible-viral sets. Contigs are split into CHUNK_SIZE-contig chunks and
+#      blasted with bounded parallelism to keep memory in check.
+#
+# HARDWARE: this runs on the *hugemem* queue (1.5 TB RAM) on purpose. The nt
+# database is ~706 GB; a normal node (190 GB) can cache only a fraction of it
+# and blastn becomes I/O-bound on /g/data Lustre (~1 of 48 cores busy). On a
+# hugemem node all of nt fits in the page cache, so after a one-time warm-up
+# blastn is CPU-bound and ~10-50x faster. We warm the cache once per node and
+# (when run as a grouped array) process several samples per node so that warm
+# cache is reused rather than re-read on 20 separate nodes.
+#
+# Per sample, writes to results/13_blastn/<sample>/:
+#   <sample>_blast.txt                  merged blastn hits (cols 1-13 as before; 14 staxids 15 sscinames 16 stitle)
+#   <sample>_blast_hits.txt             query IDs with ANY nt hit
+#   <sample>_unknown_contigs.fa         contigs with NO nt hit  <-- input to 14 & 16
+#   <sample>_sorted_blast.txt           hits sorted by query, e-value
+#   <sample>_possible_viral_hits.txt    best hit per query in viral/unknown kingdoms
+#   <sample>_possible_viral_contigs.fasta
+#
+# NB: every contig is blasted - there is NO length/complexity pre-filter, so no
+# potential viral contig is ever dropped before the nt search.
+#
+# Submission modes:
+#   * No array  (qsub / submit_all without -J): one job blasts ALL samples
+#     sequentially on this node (warm cache reused across them).
+#   * Grouped array (qsub -J 1-G -v NGROUPS=G): G subjobs; subjob k blasts
+#     samples k, k+G, k+2G, ... so each node warms nt once and handles a slice
+#     of the samples. This is how submit_all.sh launches it.
+# Either way each chunk's output is written atomically and skipped if already
+# present, so a timed-out/failed task is safe to just re-submit (it resumes).
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_BLAST"
+
+export BLASTDB_LMDB_DISABLE=1
+export BLASTDB="$NT_DB_PATH"
+
+MEGAHIT="${RESULTS_DIR}/12_megahit"
+RESULTS="${RESULTS_DIR}/13_blastn"
+mkdir -p "$RESULTS"
+
+# --- warm nt into page cache (hugemem only makes sense if we do this) --------
+# Read the nt volumes + taxdb sequentially once so the kernel caches them in
+# RAM; subsequent blastn calls then hit RAM instead of random-reading Lustre.
+# Sequential read of ~706 GB is minutes; set WARM_NT=0 to skip (e.g. on a
+# normal node where it won't fit anyway).
+if [ "${WARM_NT:-1}" = "1" ] && [ "$DRYRUN" != "1" ]; then
+    echo "[$(date)] warming nt cache from ${NT_DB_PATH} ..."
+    cat "${NT_DB_PATH}/${NT_DB_NAME}".* "${NT_DB_PATH}"/taxdb.* > /dev/null 2>&1 || true
+    echo "[$(date)] warm-up done"
+fi
+
+# Concurrency: with nt resident in RAM the search is CPU-bound, so fill the
+# node - MAX_PARALLEL chunks each on THREADS_PER_CHUNK threads ~= ncpus. The
+# parallel blastn processes share the same cached nt pages, so RAM cost does
+# not multiply.
+THREADS_PER_CHUNK=8
+MAX_PARALLEL=$(( ${PBS_NCPUS:-$THREADS} / THREADS_PER_CHUNK ))
+[ "$MAX_PARALLEL" -lt 1 ] && MAX_PARALLEL=1
+
+blast_sample() {
+    local sample="$1"
+    local query="${MEGAHIT}/${sample}/${sample}_renamed_contigs.fa"
+    local sdir="${RESULTS}/${sample}"
+    local scratch="${SCRATCH_BASE}/blastn_${sample}_${PBS_JOBID:-local}"
+    local chunkdir="${scratch}/chunks"
+
+    # Resume: skip a sample already finished (rm its .done or set FORCE=1 to redo).
+    if [ -f "${sdir}/.done" ] && [ "${FORCE:-0}" != "1" ]; then
+        echo "[$(date)] skip ${sample}: already done"
+        return 0
+    fi
+    if [ ! -f "$query" ]; then
+        echo "ERROR: query not found for ${sample}: ${query}" >&2
+        return 1
+    fi
+
+    echo "[$(date)] === blastn ${sample} ==="
+    if [ "$DRYRUN" = "1" ]; then
+        echo "+ (dryrun) seqkit split2 + blastn ${MAX_PARALLEL}x${THREADS_PER_CHUNK} threads -> ${sdir}"
+        return 0
+    fi
+
+    mkdir -p "$sdir" "$chunkdir"
+    export TMPDIR="$scratch" TEMP="$scratch" TMP="$scratch"
+
+    # --- split contigs into chunks ---
+    seqkit split2 "$query" -s "$CHUNK_SIZE" -O "$chunkdir" --force
+    find "$chunkdir" -name '*.fa' | sort > "${sdir}/${sample}_chunks.txt"
+    local total; total=$(wc -l < "${sdir}/${sample}_chunks.txt")
+    echo "[$(date)] ${total} chunk(s)"
+    [ "$total" -eq 0 ] && { echo "ERROR: no chunks for ${sample}" >&2; rm -rf "$scratch"; return 1; }
+
+    # --- blast each chunk, bounded parallelism, atomic per-chunk output ---
+    while IFS= read -r chunk; do
+        local cname out; cname=$(basename "$chunk" .fa); out="${sdir}/${cname}_blast.txt"
+        [ -s "$out" ] && continue
+        while [ "$(jobs -r | wc -l)" -ge "$MAX_PARALLEL" ]; do sleep 2; done
+        (
+            blastn -db "$NT_DB_NAME" -query "$chunk" -out "${out}.tmp" \
+                -outfmt "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore sskingdoms staxids sscinames stitle" \
+                -evalue "$EVALUE_BLASTN" -num_threads "$THREADS_PER_CHUNK" 2>/dev/null \
+            && mv "${out}.tmp" "$out" || rm -f "${out}.tmp"
+        ) &
+        sleep 1
+    done < "${sdir}/${sample}_chunks.txt"
+    wait
+
+    # --- merge ---
+    find "$sdir" -name '*_blast.txt' -type f ! -name "${sample}_blast.txt" -exec cat {} + \
+        > "${sdir}/${sample}_blast.txt" || true
+
+    # --- known vs unknown contigs ---
+    cut -f1 "${sdir}/${sample}_blast.txt" | sort -T "$scratch" -u > "${sdir}/${sample}_blast_hits.txt"
+    awk 'BEGIN{while((getline l < "'"${sdir}/${sample}_blast_hits.txt"'")>0) hit[l]=1}
+         /^>/{h=substr($1,2); keep=!(h in hit)} {if(keep) print}' \
+        "$query" > "${sdir}/${sample}_unknown_contigs.fa"
+
+    # --- sort + extract possible viral (viral/unknown kingdom, best hit/query) ---
+    sort -t $'\t' -k1,1 -k11,11g -T "$scratch" "${sdir}/${sample}_blast.txt" \
+        > "${sdir}/${sample}_sorted_blast.txt"
+    awk -F'\t' '!seen[$1]++ && ($13=="Viruses" || $13=="Unclassified" || $13=="N/A" || $13=="Other" || $13=="")' \
+        "${sdir}/${sample}_sorted_blast.txt" > "${sdir}/${sample}_possible_viral_hits.txt"
+    cut -f1 "${sdir}/${sample}_possible_viral_hits.txt" | sort -T "$scratch" -u \
+        > "${sdir}/${sample}_possible_viral_query_ids.txt"
+    awk 'BEGIN{while((getline l < "'"${sdir}/${sample}_possible_viral_query_ids.txt"'")>0) vir[l]=1}
+         /^>/{h=substr($1,2); keep=(h in vir)} {if(keep) print}' \
+        "$query" > "${sdir}/${sample}_possible_viral_contigs.fasta"
+
+    # --- cleanup chunk-level files ---
+    find "$sdir" -name '*_blast.txt' -type f ! -name "${sample}_blast.txt" -delete
+    rm -rf "$scratch"
+
+    echo "[$(date)] ${sample}: $(wc -l < "${sdir}/${sample}_blast_hits.txt") hits, "\
+"$(grep -c '^>' "${sdir}/${sample}_unknown_contigs.fa" || true) unknown contigs, "\
+"$(wc -l < "${sdir}/${sample}_possible_viral_query_ids.txt") possible-viral"
+
+    touch "${sdir}/.done"
+}
+
+mapfile -t SAMPLES < <(list_samples)
+nsamp=${#SAMPLES[@]}
+
+if [ -n "${PBS_ARRAY_INDEX:-}" ]; then
+    # Grouped array: subjob k (1-based) handles samples k, k+G, k+2G, ...
+    # where G = NGROUPS (the array width). Defaults to one sample per subjob if
+    # NGROUPS is unset, which reproduces the plain -J 1-N (one sample) behaviour.
+    stride="${NGROUPS:-$nsamp}"
+    [ "$stride" -ge 1 ] || stride=1
+    rc=0
+    for (( i = PBS_ARRAY_INDEX - 1; i < nsamp; i += stride )); do
+        echo "[$(date)] >>> group ${PBS_ARRAY_INDEX}/${stride}: sample ${SAMPLES[$i]} ($((i+1))/${nsamp})"
+        blast_sample "${SAMPLES[$i]}" || { rc=1; echo "WARN: ${SAMPLES[$i]} failed; continuing" >&2; }
+    done
+    exit $rc
+else
+    for s in "${SAMPLES[@]}"; do blast_sample "$s" || echo "WARN: ${s} failed; continuing with next sample" >&2; done
+fi

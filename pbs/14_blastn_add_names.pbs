@@ -1,0 +1,96 @@
+#!/bin/bash
+#PBS -l ncpus=1
+#PBS -l mem=8gb
+#PBS -l walltime=04:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}+gdata/if89
+# ============================================================================
+# 14 - Add scientific names to blastn hits (no re-BLAST)
+# ----------------------------------------------------------------------------
+# Maps the subject accession in column 2 (sseqid) of a blastn table to its
+# scientific name + title with `blastdbcmd`, writing <input>_named.txt with two
+# extra columns appended:
+#       ... <sscinames>\t<stitle>
+#
+# Mainly for blastn tables that lack names (e.g. results produced before stage
+# 13 started emitting sscinames/stitle directly). For fresh stage-13 runs the
+# names are already in the table, so this stage is optional.
+#
+# Default (no args): annotate each sample's possible-viral hits under
+#   results/13_blastn/<sample>/<sample>_possible_viral_hits.txt
+# Or pass explicit files (e.g. an older run elsewhere):
+#   bash pbs/14_blastn_add_names.pbs FILE [FILE ...]
+#   bash pbs/14_blastn_add_names.pbs \
+#        /g/data/${PROJECT}/${USER}/BLAST/blast_results/*/*_possible_viral_hits.txt
+#
+# It prints, per file, how many subjects resolved to a name so you can tell at a
+# glance whether the accession format matched.
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_BLAST"
+export BLASTDB="$NT_DB_PATH"
+
+# Files from positional args, or `qsub -v FILES="f1 f2 ..."`, else default to
+# each sample's possible-viral hits from stage 13.
+if [ "$#" -gt 0 ]; then
+    INPUTS=( "$@" )
+elif [ -n "${FILES:-}" ]; then
+    read -r -a INPUTS <<< "$FILES"
+else
+    INPUTS=()
+    for s in $(list_samples); do
+        INPUTS+=( "${RESULTS_DIR}/13_blastn/${s}/${s}_possible_viral_hits.txt" )
+    done
+    [ ${#INPUTS[@]} -eq 0 ] && { echo "No inputs (empty sample sheet) and no files given." >&2; exit 1; }
+fi
+
+# Small temp dir for accession-id lists, on gdata (in this stage's -l storage;
+# /scratch is not, so it can't be used here).
+tmp="$(mktemp -d "${RESULTS_DIR}/annot.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+
+for f in "${INPUTS[@]}"; do
+    if [ ! -s "$f" ]; then echo "skip (empty/missing): $f"; continue; fi
+    echo "Annotating ${f}"
+
+    # unique subject accessions (column 2)
+    cut -f2 "$f" | sort -u > "$tmp/ids.txt"
+
+    # accession -> scientific name <tab> title  (-target_only = one row per acc)
+    blastdbcmd -db "$NT_DB_NAME" -entry_batch "$tmp/ids.txt" -target_only \
+        -outfmt $'%a\t%S\t%t' 2>"$tmp/err" > "$tmp/map.tsv" || true
+
+    out="${f%.txt}_named.txt"
+    awk -F'\t' '
+        # build lookup keyed by accession.version AND by bare accession
+        NR==FNR {
+            name[$1] = $2 "\t" $3
+            base = $1; sub(/\.[0-9]+$/, "", base)
+            if (!(base in name)) name[base] = $2 "\t" $3
+            next
+        }
+        {
+            key = $2
+            if (!(key in name)) {                 # strip gi|..|ref|ACC| decorations
+                n = split($2, a, "|"); for (i=n; i>=1; i--) if (a[i] != "") { key = a[i]; break }
+            }
+            if (!(key in name)) { sub(/\.[0-9]+$/, "", key) }   # try without version
+            print $0 "\t" ((key in name) ? name[key] : "NA\tNA")
+        }' "$tmp/map.tsv" "$f" > "$out"
+
+    total=$(wc -l < "$f")
+    na=$(grep -c $'\tNA\tNA$' "$out" || true)
+    echo "  -> ${out}   (named $((total - na))/${total} rows; ${na} unresolved)"
+done
+
+echo "Done."

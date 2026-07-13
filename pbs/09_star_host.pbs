@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -l ncpus=48
+#PBS -l mem=100gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}
+# ============================================================================
+# 09 - Host depletion with STAR; keep the reads that DON'T map to the host
+# ----------------------------------------------------------------------------
+# Input: rRNA-depleted pairs from stage 06. Reads are passed gzipped via
+# --readFilesCommand zcat (no need to gunzip in place). The unmapped mates are
+# written as <sample>_Unmapped.out.mate1/2 and renamed to .fq in stage 10.
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+
+RRNA="${RESULTS_DIR}/06_rrna"
+OUT="${RESULTS_DIR}/09_star"
+mkdir -p "$OUT"
+
+for sample in $(list_samples); do
+    sdir="${OUT}/${sample}"
+    mkdir -p "$sdir"
+    echo "STAR host alignment: ${sample}"
+    run STAR --runThreadN "${PBS_NCPUS:-$THREADS}" \
+        --readFilesIn "${RRNA}/${sample}_unmapped1.fq.gz" "${RRNA}/${sample}_unmapped2.fq.gz" \
+        --readFilesCommand zcat \
+        --genomeDir "$STAR_GENOME_DIR" \
+        --outSAMtype BAM SortedByCoordinate \
+        --outFileNamePrefix "${sdir}/${sample}_" \
+        --limitBAMsortRAM "$STAR_LIMIT_BAM_SORT_RAM" \
+        --outReadsUnmapped Fastx
+done

@@ -1,0 +1,80 @@
+#!/bin/bash
+#PBS -l ncpus=48
+#PBS -l mem=190gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}+scratch/${PROJECT}
+# ============================================================================
+# 15 - DIAMOND blastx of the blastn-UNKNOWN contigs vs nr
+# ----------------------------------------------------------------------------
+# This is the "standard" sensitive translated search. Stage 17 (RdRp-scan) runs
+# on the SAME unknown contigs so the two can be compared.
+#
+# Output (per sample): results/15_diamond_nr/<sample>/<sample>_diamond_nr.tsv
+# outfmt columns match blastx_add_taxid.r:
+#   qseqid sseqid pident length evalue bitscore staxids
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_BLAST"
+
+BLASTN="${RESULTS_DIR}/13_blastn"
+OUT="${RESULTS_DIR}/15_diamond_nr"
+mkdir -p "$OUT"
+
+diamond_sample() {
+    local sample="$1"
+    local query="${BLASTN}/${sample}/${sample}_unknown_contigs.fa"
+    local sdir="${OUT}/${sample}"
+    local out="${sdir}/${sample}_diamond_nr.tsv"
+
+    # Resume: skip a sample already finished (rm its .done or set FORCE=1 to redo).
+    if [ -f "${sdir}/.done" ] && [ "${FORCE:-0}" != "1" ]; then
+        echo "Skipping ${sample}: already done"
+        return 0
+    fi
+    if [ ! -s "$query" ]; then
+        echo "Skipping ${sample}: no unknown contigs (${query})"
+        return 0
+    fi
+    mkdir -p "$sdir"
+    echo "DIAMOND blastx vs nr: ${sample}"
+    run diamond blastx \
+        --db "$NR_DMND" \
+        --query "$query" \
+        --out "${out}.tmp" \
+        --outfmt 6 qseqid sseqid pident length evalue bitscore staxids \
+        --evalue "$EVALUE_DIAMOND" \
+        --threads "${PBS_NCPUS:-$THREADS}" \
+        --tmpdir "$SCRATCH_BASE"
+    # Publish atomically and mark done (a partial/interrupted run leaves only .tmp).
+    if [ "${DRYRUN:-0}" != "1" ]; then
+        mv "${out}.tmp" "$out" && touch "${sdir}/.done"
+    fi
+}
+
+mapfile -t SAMPLES < <(list_samples)
+nsamp=${#SAMPLES[@]}
+if [ -n "${PBS_ARRAY_INDEX:-}" ]; then
+    # Grouped array (Gadi caps arrays at 10 elements): subjob k handles samples
+    # k, k+G, k+2G, ... where G = NGROUPS (the array width). Defaults to one
+    # sample per subjob if NGROUPS is unset.
+    stride="${NGROUPS:-$nsamp}"
+    [ "$stride" -ge 1 ] || stride=1
+    rc=0
+    for (( i = PBS_ARRAY_INDEX - 1; i < nsamp; i += stride )); do
+        diamond_sample "${SAMPLES[$i]}" || { rc=1; echo "WARN: ${SAMPLES[$i]} failed; continuing" >&2; }
+    done
+    exit $rc
+else
+    for s in "${SAMPLES[@]}"; do diamond_sample "$s" || echo "WARN: ${s} failed; continuing with next sample" >&2; done
+fi

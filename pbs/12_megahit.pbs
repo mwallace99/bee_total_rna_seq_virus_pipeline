@@ -1,0 +1,47 @@
+#!/bin/bash
+#PBS -l ncpus=48
+#PBS -l mem=100gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}
+# ============================================================================
+# 12 - De novo assembly with MEGAHIT, then rename contigs to a canonical file
+# ----------------------------------------------------------------------------
+# Produces, per sample:
+#   results/12_megahit/<sample>/final.contigs.fa        (raw MEGAHIT output)
+#   results/12_megahit/<sample>/<sample>_renamed_contigs.fa
+# The renamed file prefixes every contig header with the sample ID so contig
+# IDs are unique across samples; it is the canonical input for the BLAST and
+# RdRp-scan stages (matches the *_renamed_contigs.fa name they expect).
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+
+STAR_OUT="${RESULTS_DIR}/09_star"
+OUT="${RESULTS_DIR}/12_megahit"
+mkdir -p "$OUT"
+
+for sample in $(list_samples); do
+    m1="${STAR_OUT}/${sample}/${sample}_Unmapped.out.mate1.fq"
+    m2="${STAR_OUT}/${sample}/${sample}_Unmapped.out.mate2.fq"
+    sdir="${OUT}/${sample}"
+
+    echo "MEGAHIT assembly: ${sample}"
+    # MEGAHIT refuses to write into an existing output dir; clear it for reruns.
+    [ "$DRYRUN" = "1" ] || rm -rf "$sdir"
+    run megahit -t "${PBS_NCPUS:-$THREADS}" -1 "$m1" -2 "$m2" -o "$sdir"
+
+    echo "Renaming contigs for ${sample}"
+    run bash -c "awk -v s='${sample}' '/^>/{print \">\"s\"_\"substr(\$1,2); next}1' \
+        '${sdir}/final.contigs.fa' > '${sdir}/${sample}_renamed_contigs.fa'"
+done

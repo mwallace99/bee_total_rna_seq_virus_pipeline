@@ -1,0 +1,40 @@
+#!/bin/bash
+#PBS -l ncpus=10
+#PBS -l mem=40gb
+#PBS -l walltime=48:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}
+# ============================================================================
+# 02 - Trim Galore adapter/quality trimming (per lane pair, paired-end)
+# ----------------------------------------------------------------------------
+# Each lane's R1/R2 is trimmed separately; lanes are merged later in stage 04.
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+
+OUT="${RESULTS_DIR}/02_trimmed"
+mkdir -p "$OUT"
+
+assert_pairs
+
+for sample in $(list_samples); do
+    # Index-matched R1/R2 lane lists (both sorted identically by lib helpers).
+    mapfile -t R1S < <(r1_files_for "$sample")
+    mapfile -t R2S < <(r2_files_for "$sample")
+
+    for i in "${!R1S[@]}"; do
+        echo "Trimming ${sample} lane $((i+1)): $(basename "${R1S[$i]}")"
+        run trim_galore --paired "${R1S[$i]}" "${R2S[$i]}" \
+            --gzip --cores "$THREADS" --output_dir "$OUT"
+    done
+done

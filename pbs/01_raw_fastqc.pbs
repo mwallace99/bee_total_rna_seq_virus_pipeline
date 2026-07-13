@@ -1,0 +1,34 @@
+#!/bin/bash
+#PBS -l ncpus=10
+#PBS -l mem=40gb
+#PBS -l walltime=48:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}
+# ============================================================================
+# 01 - FastQC on the raw fastq files listed in the sample sheet
+# ============================================================================
+set -euo pipefail
+
+# ---- locate repo + load config/helpers -------------------------------------
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+module load fastqc
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+
+OUT="${RESULTS_DIR}/01_raw_fastqc"
+mkdir -p "$OUT"
+
+assert_pairs
+
+# Build the explicit fastq list from the sheet (resolved to real paths).
+mapfile -t FASTQS < <(for s in $(list_samples); do r1_files_for "$s"; r2_files_for "$s"; done)
+
+echo "Running FastQC on ${#FASTQS[@]} raw fastq files -> ${OUT}"
+run fastqc -t "$THREADS" -q -o "$OUT" "${FASTQS[@]}"

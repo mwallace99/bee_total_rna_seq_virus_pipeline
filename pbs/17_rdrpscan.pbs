@@ -1,0 +1,151 @@
+#!/bin/bash
+#PBS -l ncpus=48
+#PBS -l mem=190gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}+scratch/${PROJECT}
+# ============================================================================
+# 17 - RdRp-scan: find divergent / novel RNA viruses among the UNKNOWN contigs
+# ----------------------------------------------------------------------------
+# Runs on the SAME blastn-unknown contigs as stage 15 (DIAMOND-vs-nr), so the
+# two approaches can be compared.
+#
+# Per sample (input results/13_blastn/<sample>/<sample>_unknown_contigs.fa):
+#   1. getorf translates ORFs (>= GETORF_MINLEN aa) under each viral genetic
+#      code in GETORF_TABLES.
+#   2. diamond blastx of the contigs vs the RdRp-scan protein db.
+#   3. hmmscan of the ORFs vs the RdRp-scan HMM profile db.
+#   4. union of contigs hit by either -> <sample>_rdrp_candidate_contigs.fasta
+#
+# Output dir: results/17_rdrpscan/<sample>/
+#   <sample>_rdrpscan_diamond.tsv      diamond blastx hits (outfmt 6 + evalue/bitscore)
+#   <sample>_rdrpscan_hmm.tbl          hmmscan --tblout
+#   <sample>_orfs.faa                  translated ORFs
+#   <sample>_rdrp_candidate_contigs.fasta
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV_RDRP"
+
+BLASTN="${RESULTS_DIR}/13_blastn"
+OUT="${RESULTS_DIR}/17_rdrpscan"
+mkdir -p "$OUT"
+
+# Fail loudly up front if a required tool is missing (otherwise the per-sample
+# loop silently produces empty results).
+for tool in getorf diamond hmmscan; do
+    command -v "$tool" >/dev/null 2>&1 || {
+        echo "ERROR: '$tool' not found in ${CONDA_ENV_RDRP}." >&2
+        echo "       Install it, e.g.: conda install -n <env> -c conda-forge -c bioconda emboss hmmer diamond" >&2
+        exit 1
+    }
+done
+
+# getorf -minsize is in nucleotides; convert the aa cutoff.
+MINSIZE_NT=$(( GETORF_MINLEN * 3 ))
+
+rdrpscan_sample() {
+    local sample="$1"
+    local query="${BLASTN}/${sample}/${sample}_unknown_contigs.fa"
+    local sdir="${OUT}/${sample}"
+    local orfs="${sdir}/${sample}_orfs.faa"
+    local dmnd_out="${sdir}/${sample}_rdrpscan_diamond.tsv"
+    local hmm_out="${sdir}/${sample}_rdrpscan_hmm.tbl"
+    local cand="${sdir}/${sample}_rdrp_candidate_contigs.fasta"
+
+    # Resume: skip a sample already finished (rm its .done or set FORCE=1 to redo).
+    if [ -f "${sdir}/.done" ] && [ "${FORCE:-0}" != "1" ]; then
+        echo "Skipping ${sample}: already done"
+        return 0
+    fi
+    if [ ! -s "$query" ]; then
+        echo "Skipping ${sample}: no unknown contigs"
+        return 0
+    fi
+    mkdir -p "$sdir"
+    echo "=== RdRp-scan ${sample} ==="
+
+    if [ "$DRYRUN" = "1" ]; then
+        echo "+ (dryrun) getorf[tables: ${GETORF_TABLES}] + diamond blastx vs RdRp db + hmmscan -> ${sdir}"
+        return 0
+    fi
+
+    # --- 1. translate ORFs under each viral genetic code ---
+    : > "$orfs"
+    for t in $GETORF_TABLES; do
+        local tmp="${sdir}/.orf_tbl${t}.faa"
+        getorf -sequence "$query" -outseq "$tmp" -table "$t" -minsize "$MINSIZE_NT" -find 0 \
+            2>> "${sdir}/${sample}_getorf.log" || true
+        # tag ORF headers with the table so names stay unique across codes
+        [ -s "$tmp" ] && awk -v t="$t" '/^>/{print $1"_tbl"t; next}1' "$tmp" >> "$orfs"
+        rm -f "$tmp"
+    done
+    # drop identical duplicate ORF sequences if seqkit is available
+    if [ -s "$orfs" ] && command -v seqkit >/dev/null 2>&1; then
+        seqkit rmdup -s "$orfs" -o "${orfs}.nr" 2>/dev/null && mv "${orfs}.nr" "$orfs"
+    fi
+
+    # --- 2. diamond blastx of contigs vs the RdRp-scan protein db ---
+    # No staxids: the RdRp-scan db carries no NCBI taxonomy (and none is needed).
+    diamond blastx \
+        --db "$RDRPSCAN_DMND" \
+        --query "$query" \
+        --out "$dmnd_out" \
+        --outfmt 6 qseqid sseqid pident length evalue bitscore \
+        --evalue "$EVALUE_DIAMOND" \
+        --threads "${PBS_NCPUS:-$THREADS}" \
+        --tmpdir "$SCRATCH_BASE"
+
+    # --- 3. hmmscan of ORFs vs the RdRp HMM profile db (db is pre-pressed) ---
+    if [ -s "$orfs" ]; then
+        hmmscan --tblout "$hmm_out" -E "$EVALUE_HMM" --cpu "${PBS_NCPUS:-$THREADS}" \
+            "$RDRPSCAN_HMM" "$orfs" > "${sdir}/${sample}_hmmscan.log" 2>&1
+    else
+        echo "  WARNING: no ORFs translated for ${sample} (check ${sample}_getorf.log); skipping hmmscan" >&2
+        : > "$hmm_out"
+    fi
+
+    # --- 4. union of contigs hit by diamond OR hmm -> candidate fasta ---
+    {
+        cut -f1 "$dmnd_out" 2>/dev/null
+        # hmmscan tblout col3 = query (ORF) name; strip _tbl<N> then getorf _<orf#>
+        grep -v '^#' "$hmm_out" 2>/dev/null | awk '{n=$3; sub(/_tbl[0-9]+$/,"",n); sub(/_[0-9]+$/,"",n); print n}'
+    } | sort -u > "${sdir}/${sample}_rdrp_candidate_ids.txt"
+
+    awk 'BEGIN{while((getline l < "'"${sdir}/${sample}_rdrp_candidate_ids.txt"'")>0) c[l]=1}
+         /^>/{h=substr($1,2); keep=(h in c)} {if(keep) print}' \
+        "$query" > "$cand"
+
+    echo "${sample}: $(grep -c . "${sdir}/${sample}_rdrp_candidate_ids.txt" || true) RdRp candidate contig(s)"\
+" [diamond $(cut -f1 "$dmnd_out" 2>/dev/null | sort -u | grep -c . || true),"\
+" hmm $(grep -vc '^#' "$hmm_out" 2>/dev/null || true) raw hits]"
+
+    # Mark done so a re-submitted array skips this sample (DRYRUN returns earlier).
+    touch "${sdir}/.done"
+}
+
+mapfile -t SAMPLES < <(list_samples)
+nsamp=${#SAMPLES[@]}
+if [ -n "${PBS_ARRAY_INDEX:-}" ]; then
+    # Grouped array (Gadi caps arrays at 10 elements): subjob k handles samples
+    # k, k+G, k+2G, ... where G = NGROUPS (the array width). Defaults to one
+    # sample per subjob if NGROUPS is unset.
+    stride="${NGROUPS:-$nsamp}"
+    [ "$stride" -ge 1 ] || stride=1
+    rc=0
+    for (( i = PBS_ARRAY_INDEX - 1; i < nsamp; i += stride )); do
+        rdrpscan_sample "${SAMPLES[$i]}" || { rc=1; echo "WARN: ${SAMPLES[$i]} failed; continuing" >&2; }
+    done
+    exit $rc
+else
+    for s in "${SAMPLES[@]}"; do rdrpscan_sample "$s" || echo "WARN: ${s} failed; continuing with next sample" >&2; done
+fi

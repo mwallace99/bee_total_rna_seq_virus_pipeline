@@ -1,0 +1,37 @@
+#!/bin/bash
+#PBS -l ncpus=48
+#PBS -l mem=100gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}
+# ============================================================================
+# 08 - Build the STAR host genome index (run once per host genome)
+# ----------------------------------------------------------------------------
+# Skips automatically if the index already exists. Reference FASTA/GTF and the
+# index location are set in config.sh.
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+
+if [ -f "${STAR_GENOME_DIR}/SAindex" ]; then
+    echo "STAR index already present at ${STAR_GENOME_DIR} - skipping build."
+    exit 0
+fi
+
+mkdir -p "$STAR_GENOME_DIR"
+echo "Building STAR index -> ${STAR_GENOME_DIR}"
+run STAR --runThreadN "${PBS_NCPUS:-$THREADS}" \
+     --runMode genomeGenerate \
+     --genomeDir "$STAR_GENOME_DIR" \
+     --genomeFastaFiles "$STAR_FASTA" \
+     --sjdbGTFfile "$STAR_GTF" \
+     --genomeSAindexNbases "$STAR_SA_NBASES"

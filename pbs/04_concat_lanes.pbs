@@ -1,0 +1,49 @@
+#!/bin/bash
+#PBS -l ncpus=10
+#PBS -l mem=40gb
+#PBS -l walltime=24:00:00
+#PBS -l wd
+#PBS -q normal
+#PBS -l storage=gdata/${PROJECT}
+# ============================================================================
+# 04 - Concatenate per-lane trimmed reads into one R1/R2 pair per sample
+# ----------------------------------------------------------------------------
+# Replaces the hard-coded L003+L004 cat blocks: each sample's trimmed lane
+# files (any number of lanes) are merged into ${sample}_R{1,2}_main.fq.gz.
+# ============================================================================
+set -euo pipefail
+
+_d="${PBS_O_WORKDIR:-$PWD}"
+while [ "$_d" != "/" ] && [ ! -f "$_d/config.sh" ]; do _d="$(dirname "$_d")"; done
+[ -f "$_d/config.sh" ] || { echo "ERROR: cannot find config.sh; run from the repo dir"; exit 1; }
+source "$_d/config.sh"
+source "$_d/lib/parse_samples.sh"
+cd "$PROJECT_DIR"
+
+source "$CONDA_SH"
+conda activate "$CONDA_ENV"
+
+TRIM="${RESULTS_DIR}/02_trimmed"
+OUT="${RESULTS_DIR}/04_concat"
+mkdir -p "$OUT"
+
+# Map a raw fastq name to its trim_galore validated output name.
+#   raw  K01-F_..._L003_R1.fastq.gz  ->  K01-F_..._L003_R1_val_1.fq.gz  (read 1)
+#   raw  K01-F_..._L003_R2.fastq.gz  ->  K01-F_..._L003_R2_val_2.fq.gz  (read 2)
+trimmed_name() {
+    local b; b="$(basename "$1")"
+    b="${b%.gz}"; b="${b%.fastq}"; b="${b%.fq}"
+    printf '%s\n' "${TRIM}/${b}_val_${2}.fq.gz"
+}
+
+for sample in $(list_samples); do
+    mapfile -t R1S < <(r1_files_for "$sample")
+    mapfile -t R2S < <(r2_files_for "$sample")
+
+    R1_TRIM=(); for f in "${R1S[@]}"; do R1_TRIM+=("$(trimmed_name "$f" 1)"); done
+    R2_TRIM=(); for f in "${R2S[@]}"; do R2_TRIM+=("$(trimmed_name "$f" 2)"); done
+
+    echo "Concatenating ${#R1_TRIM[@]} lane(s) for ${sample}"
+    run bash -c "cat ${R1_TRIM[*]} > '${OUT}/${sample}_R1_main.fq.gz'"
+    run bash -c "cat ${R2_TRIM[*]} > '${OUT}/${sample}_R2_main.fq.gz'"
+done

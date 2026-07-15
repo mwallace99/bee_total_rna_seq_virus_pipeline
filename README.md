@@ -240,6 +240,8 @@ submit_all.sh                      # qsub dependency chain
 results/                           # all outputs (created on run)
 ```
 
+[![DOI](https://zenodo.org/badge/1266813709.svg)](https://doi.org/10.5281/zenodo.21366317)
+
 ## Credits
 
 Thanks to James Damayo ([@joimes-d](https://github.com/joimes-d)) who provided

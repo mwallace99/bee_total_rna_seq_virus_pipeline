@@ -1,5 +1,7 @@
 # bee_total_rna_seq_virus_pipeline
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21366317.svg)](https://doi.org/10.5281/zenodo.21366317)
+
 Finds viral contigs in **total RNA-seq** data from bees (or any host):
 QC → trim → rRNA + host depletion → de novo assembly → a two-pronged virus
 search (**DIAMOND blastx vs nr** + **RdRp-scan** for divergent/novel RNA
@@ -239,8 +241,6 @@ pbs/00_setup.pbs … 18_*.pbs        # pipeline stages
 submit_all.sh                      # qsub dependency chain
 results/                           # all outputs (created on run)
 ```
-
-[![DOI](https://zenodo.org/badge/1266813709.svg)](https://doi.org/10.5281/zenodo.21366317)
 
 ## Credits
 

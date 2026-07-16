@@ -15,6 +15,12 @@ results/
 Results/
 names.txt
 
+# Real sample sheets carry raw fastq filenames (barcodes etc.) and are
+# study-specific, so they should not live in the public repo. The committed
+# template is kept via the negation below.
+*_rna_samples.txt
+!example_rna_samples.txt
+
 # Sequence data and alignments, wherever they land - a stray fastq or BAM in the
 # checkout is never wanted and these files are far too big for git.
 *.fastq
